@@ -376,6 +376,18 @@ class MOZ_STACK_CLASS ModuleGenerator {
   [[nodiscard]] bool finishPartialTier2();
 };
 
+class MOZ_STACK_CLASS ComponentGenerator {
+  UniqueChars* const error_;
+  UniqueCharsVector* const warnings_;
+
+ public:
+  // TODO: Add cancellation
+  ComponentGenerator(UniqueChars* error, UniqueCharsVector* warnings)
+      : error_(error), warnings_(warnings) {}
+
+  SharedComponent finishComponent();
+};
+
 }  // namespace wasm
 }  // namespace js
 

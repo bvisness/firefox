@@ -1560,6 +1560,11 @@ void ModuleGenerator::warnf(const char* msg, ...) {
   (void)warnings_->append(std::move(str));
 }
 
+SharedComponent ComponentGenerator::finishComponent() {
+  // TODO: Return literally anything else
+  return nullptr;
+}
+
 size_t CompiledCode::sizeOfExcludingThis(
     mozilla::MallocSizeOf mallocSizeOf) const {
   return funcs.sizeOfExcludingThis(mallocSizeOf) +

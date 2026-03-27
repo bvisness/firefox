@@ -1029,8 +1029,47 @@ static SharedComponent CompileComponent(
     Decoder& d, const CompileArgs& args, const BytecodeBufferOrSource& bytecode,
     UniqueChars* error, UniqueCharsVector* warnings,
     JS::OptimizedEncodingListener* listener) {
-  d.fail("u are now compile a component, cool");
-  return nullptr;
+  // TODO: Do I need this ComponentGenerator, or do I just need the Component?
+  ComponentGenerator cg(error, warnings);
+
+  // TODO: This is failing to compile
+  // MutableComponent component = js_new<Component>();
+  // if (!component) {
+  //   return nullptr;
+  // }
+
+  while (!d.done()) {
+    uint8_t sectionID;
+    if (!d.readFixedU8(&sectionID)) {
+      d.fail("expected section ID");
+      return nullptr;
+    }
+
+    uint32_t sectionLength;
+    if (!d.readVarU32(&sectionLength)) {
+      d.fail("expected section length");
+      return nullptr;
+    }
+
+    switch (sectionID) {
+      case 1: {  // core:module
+        // TODO: Do I need to make a new decoder with a smaller range? Probably.
+        SharedModule module =
+            CompileModule(d, args, bytecode, error, warnings, listener);
+        if (!module) {
+          return nullptr;
+        }
+        // TODO: Do something with the module
+      } break;
+      default: {
+        d.failf("unexpected section ID %d", sectionID);
+        return nullptr;
+      }
+    }
+  }
+
+  d.fail("task failed successfully!!");
+  return cg.finishComponent();
 }
 
 SharedModuleOrComponent wasm::CompileBuffer(
