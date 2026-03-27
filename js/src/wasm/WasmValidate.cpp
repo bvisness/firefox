@@ -4191,7 +4191,8 @@ bool wasm::StartsCodeSection(const uint8_t* begin, const uint8_t* end,
   Decoder d(begin, end, 0, &unused);
 
   bool _unused;
-  if (!DecodePreamble(d, false, &_unused)) {
+  if (!DecodePreamble(d, /*allowModules=*/true, /*allowComponents=*/false,
+                      &_unused)) {
     return false;
   }
 
@@ -4309,7 +4310,10 @@ static bool DecodeBranchHintingSection(Decoder& d, CodeMetadata* codeMeta) {
 }
 #endif
 
-bool wasm::DecodePreamble(Decoder& d, bool allowComponents, bool* isComponent) {
+bool wasm::DecodePreamble(Decoder& d, bool allowModules, bool allowComponents,
+                          bool* isComponent) {
+  *isComponent = false;
+
   if (d.bytesRemain() > MaxModuleBytes) {
     return d.fail("module too big");
   }
@@ -4325,19 +4329,31 @@ bool wasm::DecodePreamble(Decoder& d, bool allowComponents, bool* isComponent) {
   }
 
 #ifdef ENABLE_WASM_COMPONENTS
-  if (allowComponents && version == EncodingVersionComponent) {
-    *isComponent = true;
-    return true;
+  if (allowComponents) {
+    if (version == EncodingVersionComponent) {
+      *isComponent = true;
+      return true;
+    }
+    if (!allowModules) {
+      return d.failf("binary version 0x%" PRIx32
+                     " does not match expected version 0x%" PRIx32,
+                     version, EncodingVersionComponent);
+    }
   }
 #endif
 
-  if (version != EncodingVersionCoreModule) {
-    return d.failf("binary version 0x%" PRIx32
-                   " does not match expected version 0x%" PRIx32,
-                   version, EncodingVersionCoreModule);
+  if (allowModules) {
+    if (version == EncodingVersionCoreModule) {
+      return true;
+    }
+    if (!allowComponents) {
+      return d.failf("binary version 0x%" PRIx32
+                     " does not match expected version 0x%" PRIx32,
+                     version, EncodingVersionCoreModule);
+    }
   }
-  *isComponent = false;
-  return true;
+
+  return false;
 }
 
 bool wasm::DecodeModuleEnvironment(Decoder& d, CodeMetadata* codeMeta,
@@ -4729,7 +4745,8 @@ bool wasm::Validate(JSContext* cx, const BytecodeSource& bytecode,
   Decoder envDecoder(bytecode.envSpan(), bytecode.envRange().start, error);
 
   bool isComponent;
-  if (!DecodePreamble(envDecoder, codeMeta->componentsEnabled(),
+  if (!DecodePreamble(envDecoder, /*allowModules=*/true,
+                      /*allowComponents=*/codeMeta->componentsEnabled(),
                       &isComponent)) {
     return false;
   }

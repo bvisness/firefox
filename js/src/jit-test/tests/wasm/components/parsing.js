@@ -1,0 +1,27 @@
+assertErrorMessage(() => new WebAssembly.Component(), TypeError, /1 argument required/);
+assertErrorMessage(() => new WebAssembly.Component(42), TypeError, /first argument must be an ArrayBuffer/);
+assertErrorMessage(() => new WebAssembly.Component(new Uint8Array([
+  0,
+])), WebAssembly.CompileError, /failed to match magic number/);
+assertErrorMessage(() => new WebAssembly.Component(new Uint8Array([
+  0, 0, 0, 0,
+])), WebAssembly.CompileError, /failed to match magic number/);
+assertErrorMessage(() => new WebAssembly.Component(new Uint8Array([
+  0, 0x61, 0x73, 0x6D,
+])), WebAssembly.CompileError, /failed to read version/);
+assertErrorMessage(() => new WebAssembly.Component(new Uint8Array([
+  0, 0x61, 0x73, 0x6D,
+])), WebAssembly.CompileError, /failed to read version/);
+assertErrorMessage(() => new WebAssembly.Component(new Uint8Array([
+  0, 0x61, 0x73, 0x6D,
+  0, 0, 0, 0,
+])), WebAssembly.CompileError, /binary version .* does not match/);
+assertErrorMessage(() => new WebAssembly.Component(new Uint8Array([
+  0, 0x61, 0x73, 0x6D,
+  1, 0, 0, 0,
+])), WebAssembly.CompileError, /binary version .* does not match/);
+
+new WebAssembly.Component(new Uint8Array([
+  0, 0x61, 0x73, 0x6D,
+  1, 0, 0x0d, 0,
+]));

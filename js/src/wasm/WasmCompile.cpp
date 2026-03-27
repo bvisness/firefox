@@ -1025,6 +1025,14 @@ static SharedModule CompileModule(Decoder& d, const CompileArgs& args,
   return mg.finishModule(bytecode, *moduleMeta, listener);
 }
 
+static SharedComponent CompileComponent(
+    Decoder& d, const CompileArgs& args, const BytecodeBufferOrSource& bytecode,
+    UniqueChars* error, UniqueCharsVector* warnings,
+    JS::OptimizedEncodingListener* listener) {
+  d.fail("u are now compile a component, cool");
+  return nullptr;
+}
+
 SharedModuleOrComponent wasm::CompileBuffer(
     const CompileArgs& args, const BytecodeBufferOrSource& bytecode,
     UniqueChars* error, UniqueCharsVector* warnings,
@@ -1034,7 +1042,9 @@ SharedModuleOrComponent wasm::CompileBuffer(
                      error, warnings);
 
   bool isComponent;
-  if (!DecodePreamble(envDecoder, args.features.components, &isComponent)) {
+  if (!DecodePreamble(envDecoder, /*allowModules=*/true,
+                      /*allowComponents=*/args.features.components,
+                      &isComponent)) {
     return SharedModuleOrComponent(false);
   }
 
@@ -1060,11 +1070,33 @@ SharedModule wasm::CompileBufferModule(
                      error, warnings);
 
   bool _unused;
-  if (!DecodePreamble(envDecoder, false, &_unused)) {
+  if (!DecodePreamble(envDecoder, /*allowModules=*/true,
+                      /*allowComponents=*/false, &_unused)) {
     return nullptr;
   }
 
   return CompileModule(envDecoder, args, bytecode, error, warnings, listener);
+}
+
+SharedComponent wasm::CompileBufferComponent(
+    const CompileArgs& args, const BytecodeBufferOrSource& bytecode,
+    UniqueChars* error, UniqueCharsVector* warnings,
+    JS::OptimizedEncodingListener* listener) {
+  const BytecodeSource& bytecodeSource = bytecode.source();
+  Decoder d(bytecodeSource.envSpan(), bytecodeSource.envRange().start, error,
+            warnings);
+
+  bool isComponent;
+  if (!DecodePreamble(d, /*allowModules=*/false, /*allowComponents=*/true,
+                      &isComponent)) {
+    return nullptr;
+  }
+  if (!isComponent) {
+    d.fail("expected a WebAssembly component");
+    return nullptr;
+  }
+
+  return CompileComponent(d, args, bytecode, error, warnings, listener);
 }
 
 bool wasm::CompileCompleteTier2(const ShareableBytes* codeSection,
@@ -1189,7 +1221,9 @@ SharedModule wasm::CompileStreaming(
     Decoder d(envBytes.vector, 0, error, warnings);
 
     bool isComponent;
-    if (!DecodePreamble(d, codeMeta.componentsEnabled(), &isComponent)) {
+    if (!DecodePreamble(d, /*allowModules=*/true,
+                        /*allowComponents=*/codeMeta.componentsEnabled(),
+                        &isComponent)) {
       return nullptr;
     }
     if (isComponent) {
@@ -1312,8 +1346,10 @@ bool wasm::DumpIonFunctionInModule(const ShareableBytes& bytecode,
   }
 
   bool isComponent;
-  if (!DecodePreamble(d, moduleMeta->codeMeta->componentsEnabled(),
-                      &isComponent)) {
+  if (!DecodePreamble(
+          d, /*allowModules=*/true,
+          /*allowComponents=*/moduleMeta->codeMeta->componentsEnabled(),
+          &isComponent)) {
     return false;
   }
   if (!DecodeModuleEnvironment(d, moduleMeta->codeMeta, moduleMeta)) {

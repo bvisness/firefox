@@ -131,6 +131,7 @@
   REAL(AsyncGeneratorFunction, CLASP(AsyncGeneratorFunction))                \
   REAL(WebAssembly, OCLASP(WasmNamespace))                                   \
   REAL(WasmModule, OCLASP(WasmModule))                                       \
+  REAL(WasmComponent, OCLASP(WasmComponent))                                 \
   REAL(WasmInstance, OCLASP(WasmInstance))                                   \
   REAL(WasmMemory, OCLASP(WasmMemory))                                       \
   REAL(WasmTable, OCLASP(WasmTable))                                         \

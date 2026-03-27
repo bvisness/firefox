@@ -58,6 +58,7 @@ class Decoder;
 class GeneratedSourceMap;
 class Instance;
 class Module;
+class Component;
 
 class Code;
 using SharedCode = RefPtr<const Code>;

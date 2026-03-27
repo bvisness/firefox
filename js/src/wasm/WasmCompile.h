@@ -52,6 +52,11 @@ SharedModule CompileBufferModule(
     UniqueChars* error, UniqueCharsVector* warnings,
     JS::OptimizedEncodingListener* listener = nullptr);
 
+SharedComponent CompileBufferComponent(
+    const CompileArgs& args, const BytecodeBufferOrSource& bytecode,
+    UniqueChars* error, UniqueCharsVector* warnings,
+    JS::OptimizedEncodingListener* listener = nullptr);
+
 SharedModuleOrComponent CompileBuffer(
     const CompileArgs& args, const BytecodeBufferOrSource& bytecode,
     UniqueChars* error, UniqueCharsVector* warnings,
