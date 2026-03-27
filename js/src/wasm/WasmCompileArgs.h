@@ -124,6 +124,10 @@ struct FeatureOptions {
   bool jsStringConstants;
   SharedChars jsStringConstantsNamespace;
 
+  // Disable component parsing along this path.
+  // TODO: A bunch of the above stuff is module-specific. Is this a problem?
+  bool disableComponents;
+
   // Parse the compile options bag.
   [[nodiscard]] bool init(JSContext* cx, HandleValue val);
 };

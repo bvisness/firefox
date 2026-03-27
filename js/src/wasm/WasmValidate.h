@@ -144,12 +144,14 @@ using ValidatingOpIter = OpIter<ValidatingPolicy>;
 [[nodiscard]] bool StartsCodeSection(const uint8_t* begin, const uint8_t* end,
                                      BytecodeRange* codeSection);
 
+[[nodiscard]] bool DecodePreamble(Decoder& d, bool allowComponents,
+                                  bool* isComponent);
+
 // Calling DecodeModuleEnvironment decodes all sections up to the code section
 // and performs full validation of all those sections. The client must then
 // decode the code section itself, reusing ValidateFunctionBody if necessary,
 // and finally call DecodeModuleTail to decode all remaining sections after the
 // code section (again, performing full validation).
-
 [[nodiscard]] bool DecodeModuleEnvironment(Decoder& d, CodeMetadata* codeMeta,
                                            ModuleMetadata* moduleMeta);
 

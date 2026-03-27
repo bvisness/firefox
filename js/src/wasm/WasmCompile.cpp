@@ -950,21 +950,17 @@ static bool DecodeCodeSection(const CodeMetadata& codeMeta, DecoderT& d,
   return mg.finishFuncDefs();
 }
 
-SharedModule wasm::CompileBuffer(const CompileArgs& args,
-                                 const BytecodeBufferOrSource& bytecode,
-                                 UniqueChars* error,
-                                 UniqueCharsVector* warnings,
-                                 JS::OptimizedEncodingListener* listener) {
+static SharedModule CompileModule(Decoder& d, const CompileArgs& args,
+                                  const BytecodeBufferOrSource& bytecode,
+                                  UniqueChars* error,
+                                  UniqueCharsVector* warnings,
+                                  JS::OptimizedEncodingListener* listener) {
   MutableModuleMetadata moduleMeta = js_new<ModuleMetadata>();
   if (!moduleMeta || !moduleMeta->init(args)) {
     return nullptr;
   }
 
-  const BytecodeSource& bytecodeSource = bytecode.source();
-  Decoder envDecoder(bytecodeSource.envSpan(), bytecodeSource.envRange().start,
-                     error, warnings);
-  if (!DecodeModuleEnvironment(envDecoder, moduleMeta->codeMeta.get(),
-                               moduleMeta)) {
+  if (!DecodeModuleEnvironment(d, moduleMeta->codeMeta.get(), moduleMeta)) {
     return nullptr;
   }
 
@@ -982,17 +978,18 @@ SharedModule wasm::CompileBuffer(const CompileArgs& args,
 
   // If our bytecode has a code section, then we must switch decoders for
   // these section.
+  const BytecodeSource& bytecodeSource = bytecode.source();
   if (bytecodeSource.hasCodeSection()) {
     // DecodeModuleEnvironment will stop and return true if there is an unknown
     // section before the code section. We must check this and return an error.
     if (!moduleMeta->codeMeta->codeSectionRange) {
-      envDecoder.fail("unknown section before code section");
+      d.fail("unknown section before code section");
       return nullptr;
     }
 
     // Our pre-parse that split the module should ensure that after we've
     // parsed the environment there are no bytes left.
-    MOZ_RELEASE_ASSERT(envDecoder.done());
+    MOZ_RELEASE_ASSERT(d.done());
 
     Decoder codeDecoder(bytecodeSource.codeSpan(),
                         bytecodeSource.codeRange().start, error, warnings);
@@ -1013,19 +1010,61 @@ SharedModule wasm::CompileBuffer(const CompileArgs& args,
   } else {
     // We still must call this method even without a code section because it
     // does validation that ensure we aren't missing function definitions.
-    if (!DecodeCodeSection(*moduleMeta->codeMeta, envDecoder, mg)) {
+    if (!DecodeCodeSection(*moduleMeta->codeMeta, d, mg)) {
       return nullptr;
     }
 
-    if (!DecodeModuleTail(envDecoder, moduleMeta->codeMeta, moduleMeta)) {
+    if (!DecodeModuleTail(d, moduleMeta->codeMeta, moduleMeta)) {
       return nullptr;
     }
 
     // Decoding the module tail should consume all remaining bytes.
-    MOZ_RELEASE_ASSERT(envDecoder.done());
+    MOZ_RELEASE_ASSERT(d.done());
   }
 
   return mg.finishModule(bytecode, *moduleMeta, listener);
+}
+
+SharedModuleOrComponent wasm::CompileBuffer(
+    const CompileArgs& args, const BytecodeBufferOrSource& bytecode,
+    UniqueChars* error, UniqueCharsVector* warnings,
+    JS::OptimizedEncodingListener* listener) {
+  const BytecodeSource& bytecodeSource = bytecode.source();
+  Decoder envDecoder(bytecodeSource.envSpan(), bytecodeSource.envRange().start,
+                     error, warnings);
+
+  bool isComponent;
+  if (!DecodePreamble(envDecoder, args.features.components, &isComponent)) {
+    return SharedModuleOrComponent(false);
+  }
+
+  if (isComponent) {
+    envDecoder.fail("TODO: Components are not supported yet");
+    return SharedModuleOrComponent(false);
+  }
+
+  SharedModule module =
+      CompileModule(envDecoder, args, bytecode, error, warnings, listener);
+  if (!module) {
+    return SharedModuleOrComponent(false);
+  }
+  return SharedModuleOrComponent(module);
+}
+
+SharedModule wasm::CompileBufferModule(
+    const CompileArgs& args, const BytecodeBufferOrSource& bytecode,
+    UniqueChars* error, UniqueCharsVector* warnings,
+    JS::OptimizedEncodingListener* listener) {
+  const BytecodeSource& bytecodeSource = bytecode.source();
+  Decoder envDecoder(bytecodeSource.envSpan(), bytecodeSource.envRange().start,
+                     error, warnings);
+
+  bool _unused;
+  if (!DecodePreamble(envDecoder, false, &_unused)) {
+    return nullptr;
+  }
+
+  return CompileModule(envDecoder, args, bytecode, error, warnings, listener);
 }
 
 bool wasm::CompileCompleteTier2(const ShareableBytes* codeSection,
@@ -1149,6 +1188,15 @@ SharedModule wasm::CompileStreaming(
   {
     Decoder d(envBytes.vector, 0, error, warnings);
 
+    bool isComponent;
+    if (!DecodePreamble(d, codeMeta.componentsEnabled(), &isComponent)) {
+      return nullptr;
+    }
+    if (isComponent) {
+      d.fail("TODO: streaming compilation of components is not supported");
+      return nullptr;
+    }
+
     if (!DecodeModuleEnvironment(d, &codeMeta, moduleMeta)) {
       return nullptr;
     }
@@ -1263,6 +1311,11 @@ bool wasm::DumpIonFunctionInModule(const ShareableBytes& bytecode,
     return false;
   }
 
+  bool isComponent;
+  if (!DecodePreamble(d, moduleMeta->codeMeta->componentsEnabled(),
+                      &isComponent)) {
+    return false;
+  }
   if (!DecodeModuleEnvironment(d, moduleMeta->codeMeta, moduleMeta)) {
     return false;
   }

@@ -69,6 +69,8 @@
 #include "js/TelemetryTimers.h"
 #include "js/Utility.h"
 #include "js/WaitCallbacks.h"
+#include "js/WasmComponent.h"
+#include "js/WasmModule.h"
 #include "js/WasmModule.h"
 #include "js/Wrapper.h"
 #include "js/WrapperCallbacks.h"

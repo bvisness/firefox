@@ -439,7 +439,8 @@ bool wasm::Eval(JSContext* cx, Handle<TypedArrayObject*> code,
                         code->byteLength().valueOr(0));
   UniqueChars error;
   UniqueCharsVector warnings;
-  SharedModule module = CompileBuffer(
+  // TODO: Support components
+  SharedModule module = CompileBufferModule(
       *compileArgs, BytecodeBufferOrSource(source), &error, &warnings, nullptr);
   if (!module) {
     if (error) {
@@ -488,20 +489,20 @@ bool wasm::CompileAndSerialize(JSContext* cx,
     return false;
   }
 
-  // The caller has ensured CodeCachingAvailable(). Moreover, we want to ensure
-  // we go straight to tier-2 so that we synchronously call
+  // The caller has ensured CodeCachingAvailable(). Moreover, we want to
+  // ensure we go straight to tier-2 so that we synchronously call
   // JS::OptimizedEncodingListener::storeOptimizedEncoding().
   compileArgs->baselineEnabled = false;
   compileArgs->forceTiering = false;
 
   // We always pick Ion here, and we depend on CodeCachingAvailable() having
   // determined that Ion is available, see comments at CodeCachingAvailable().
-  // To do better, we need to pass information about which compiler that should
-  // be used into CompileAndSerialize().
+  // To do better, we need to pass information about which compiler that
+  // should be used into CompileAndSerialize().
   compileArgs->ionEnabled = true;
 
-  // Select features that are enabled. This is guaranteed to be consistent with
-  // our compiler selection, as code caching is only available if ion is
+  // Select features that are enabled. This is guaranteed to be consistent
+  // with our compiler selection, as code caching is only available if ion is
   // available, and ion is only available if it's not disabled by enabled
   // features.
   compileArgs->features = FeatureArgs::build(cx, FeatureOptions());
@@ -510,9 +511,10 @@ bool wasm::CompileAndSerialize(JSContext* cx,
 
   UniqueChars error;
   UniqueCharsVector warnings;
+  // TODO: Support components
   SharedModule module =
-      CompileBuffer(*compileArgs, BytecodeBufferOrSource(bytecodeSource),
-                    &error, &warnings, &listener);
+      CompileBufferModule(*compileArgs, BytecodeBufferOrSource(bytecodeSource),
+                          &error, &warnings, &listener);
   if (!module) {
     fprintf(stderr, "Compilation error: %s\n", error ? error.get() : "oom");
     return false;
@@ -543,8 +545,8 @@ bool wasm::DeserializeModule(JSContext* cx, const Bytes& serialized,
 //    ConvertToInt(v, 32, 'unsigned')
 // defined in Web IDL Section 3.2.4.9.
 //
-// This just generalizes that to an arbitrary limit that is representable as an
-// integer in double form.
+// This just generalizes that to an arbitrary limit that is representable as
+// an integer in double form.
 
 static bool EnforceRange(JSContext* cx, HandleValue v, const char* kind,
                          const char* noun, uint64_t max, uint64_t* val) {
@@ -630,9 +632,9 @@ static bool EnforceAddressValue(JSContext* cx, HandleValue v,
   }
 }
 
-// The AddressValue typedef, a union of number and bigint, is used in the JS API
-// spec for memory and table arguments, where number is used for memory32 and
-// bigint is used for memory64.
+// The AddressValue typedef, a union of number and bigint, is used in the JS
+// API spec for memory and table arguments, where number is used for memory32
+// and bigint is used for memory64.
 [[nodiscard]] static bool CreateAddressValue(JSContext* cx, uint64_t value,
                                              AddressType addressType,
                                              MutableHandleValue addressValue) {
@@ -686,8 +688,8 @@ static bool GetLimits(JSContext* cx, HandleObject obj, LimitsKind kind,
                       Limits* limits) {
   limits->addressType = AddressType::I32;
 
-  // Limits may specify an alternate address type, and we need this to check the
-  // ranges for initial and maximum, so look for the address type first.
+  // Limits may specify an alternate address type, and we need this to check
+  // the ranges for initial and maximum, so look for the address type first.
   // Get the address type field
   JSAtom* addressTypeAtom = Atomize(cx, "address", strlen("address"));
   if (!addressTypeAtom) {
@@ -809,11 +811,12 @@ static bool CheckLimits(JSContext* cx, uint64_t validationMax, LimitsKind kind,
   //     (not specified, RangeError in practice)
   //   - The actual allocation (should report OOM if it fails)
   //
-  // There are two questions currently left open by the spec: when is the memory
-  // or table type validated, and if it is invalid, what type of exception does
-  // it throw? In practice, all browsers throw RangeError, and by the time you
-  // read this the spec will hopefully have been updated to reflect this. See
-  // the following issue: https://github.com/WebAssembly/spec/issues/1792
+  // There are two questions currently left open by the spec: when is the
+  // memory or table type validated, and if it is invalid, what type of
+  // exception does it throw? In practice, all browsers throw RangeError, and
+  // by the time you read this the spec will hopefully have been updated to
+  // reflect this. See the following issue:
+  // https://github.com/WebAssembly/spec/issues/1792
 
   // Check that initial <= maximum
   if (limits->maximum.isSome() && *limits->maximum < limits->initial) {
@@ -1738,7 +1741,8 @@ bool WasmModuleObject::construct(JSContext* cx, unsigned argc, Value* vp) {
     }
     AutoPinBufferSourceLength pin(cx, sourceObj.get());
 
-    module = CompileBuffer(*compileArgs, bytecode, &error, &warnings, nullptr);
+    module =
+        CompileBufferModule(*compileArgs, bytecode, &error, &warnings, nullptr);
   }
 
   if (!ReportCompileWarnings(cx, warnings)) {
@@ -3044,10 +3048,10 @@ const JSPropertySpec WasmTableObject::properties[] = {
 };
 
 // Gets an AddressValue parameter for a table. This differs from our general
-// EnforceAddressValue because our table implementation still uses 32-bit sizes
-// internally, and this function therefore returns a uint32_t. Values outside
-// the 32-bit range will be clamped to UINT32_MAX, which will always trigger
-// bounds checks for all Table uses of AddressValue. See
+// EnforceAddressValue because our table implementation still uses 32-bit
+// sizes internally, and this function therefore returns a uint32_t. Values
+// outside the 32-bit range will be clamped to UINT32_MAX, which will always
+// trigger bounds checks for all Table uses of AddressValue. See
 // MacroAssembler::wasmClampTable64Address and its uses.
 //
 // isAddress should be true if the value is an actual address, and false if it
@@ -4211,10 +4215,10 @@ static JSFunction* WasmFunctionCreate(JSContext* cx, HandleObject func,
                                       HandleObject proto) {
   MOZ_ASSERT(IsCallableNonCCW(ObjectValue(*func)));
 
-  // We want to import the function to a wasm module and then export it again so
-  // that it behaves exactly like a normal wasm function and can be used like
-  // one in wasm tables. We synthesize such a module below, instantiate it, and
-  // then return the exported function as the result.
+  // We want to import the function to a wasm module and then export it again
+  // so that it behaves exactly like a normal wasm function and can be used
+  // like one in wasm tables. We synthesize such a module below, instantiate
+  // it, and then return the exported function as the result.
   FeatureOptions options;
   ScriptedCaller scriptedCaller;
   SharedCompileArgs compileArgs =
@@ -4249,8 +4253,8 @@ static JSFunction* WasmFunctionCreate(JSContext* cx, HandleObject func,
   codeMeta->funcs[0].declareFuncExported(/* eager */ true,
                                          /* canRefFunc */ true);
 
-  // We will be looking up and using the function in the future by index so the
-  // name doesn't matter.
+  // We will be looking up and using the function in the future by index so
+  // the name doesn't matter.
   CacheableName fieldName;
   if (!moduleMeta->exports.emplaceBack(std::move(fieldName), 0,
                                        DefinitionKind::Function)) {
@@ -4625,9 +4629,9 @@ struct CompileBufferTask : PromiseHelperTask {
   }
 
   void execute() override {
-    module =
-        CompileBuffer(*compileArgs, BytecodeBufferOrSource(std::move(bytecode)),
-                      &error, &warnings, nullptr);
+    module = CompileBufferModule(*compileArgs,
+                                 BytecodeBufferOrSource(std::move(bytecode)),
+                                 &error, &warnings, nullptr);
   }
 
   bool resolve(JSContext* cx, Handle<PromiseObject*> promise) override {
@@ -4948,7 +4952,8 @@ class CompileStreamTask : public PromiseHelperTask, public JS::StreamConsumer {
   UniqueChars compileError_;
   UniqueCharsVector warnings_;
 
-  // Set on stream thread and read racily on helper thread to abort compilation:
+  // Set on stream thread and read racily on helper thread to abort
+  // compilation:
   mozilla::Atomic<bool> streamFailed_;
 
   // Called on some thread before consumeChunk(), streamEnd(), streamError()):
@@ -4968,8 +4973,8 @@ class CompileStreamTask : public PromiseHelperTask, public JS::StreamConsumer {
   // Until StartOffThreadPromiseHelperTask succeeds, we are responsible for
   // dispatching ourselves back to the JS thread.
   //
-  // Warning: After this function returns, 'this' can be deleted at any time, so
-  // the caller must immediately return from the stream callback.
+  // Warning: After this function returns, 'this' can be deleted at any time,
+  // so the caller must immediately return from the stream callback.
   void setClosedAndDestroyBeforeHelperThreadStarted() {
     streamState_.lock().get() = Closed;
     dispatchResolveAndDestroy();
@@ -4988,8 +4993,8 @@ class CompileStreamTask : public PromiseHelperTask, public JS::StreamConsumer {
   // dispatchResolveAndDestroy() after execute() returns, but execute()
   // wait()s for state to be Closed.
   //
-  // Warning: After this function returns, 'this' can be deleted at any time, so
-  // the caller must immediately return from the stream callback.
+  // Warning: After this function returns, 'this' can be deleted at any time,
+  // so the caller must immediately return from the stream callback.
   void setClosedAndDestroyAfterHelperThreadStarted() {
     auto streamState = streamState_.lock();
     MOZ_ASSERT(streamState != Closed);
@@ -5093,9 +5098,9 @@ class CompileStreamTask : public PromiseHelperTask, public JS::StreamConsumer {
     switch (streamState_.lock().get()) {
       case Env: {
         BytecodeBuffer bytecode(envBytes_, nullptr, nullptr);
-        module_ = CompileBuffer(*compileArgs_,
-                                BytecodeBufferOrSource(std::move(bytecode)),
-                                &compileError_, &warnings_, nullptr);
+        module_ = CompileBufferModule(
+            *compileArgs_, BytecodeBufferOrSource(std::move(bytecode)),
+            &compileError_, &warnings_, nullptr);
         setClosedAndDestroyBeforeHelperThreadStarted();
         return;
       }

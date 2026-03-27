@@ -2544,25 +2544,6 @@ bool wasm::ValidateFunctionBody(const CodeMetadata& codeMeta,
 
 // Section macros.
 
-static bool DecodePreamble(Decoder& d) {
-  if (d.bytesRemain() > MaxModuleBytes) {
-    return d.fail("module too big");
-  }
-
-  uint32_t u32;
-  if (!d.readFixedU32(&u32) || u32 != MagicNumber) {
-    return d.fail("failed to match magic number");
-  }
-
-  if (!d.readFixedU32(&u32) || u32 != EncodingVersion) {
-    return d.failf("binary version 0x%" PRIx32
-                   " does not match expected version 0x%" PRIx32,
-                   u32, EncodingVersion);
-  }
-
-  return true;
-}
-
 static bool DecodeValTypeVector(Decoder& d, CodeMetadata* codeMeta,
                                 uint32_t count, ValTypeVector* valTypes) {
   if (!valTypes->resize(count)) {
@@ -4209,7 +4190,8 @@ bool wasm::StartsCodeSection(const uint8_t* begin, const uint8_t* end,
   UniqueChars unused;
   Decoder d(begin, end, 0, &unused);
 
-  if (!DecodePreamble(d)) {
+  bool _unused;
+  if (!DecodePreamble(d, false, &_unused)) {
     return false;
   }
 
@@ -4327,12 +4309,39 @@ static bool DecodeBranchHintingSection(Decoder& d, CodeMetadata* codeMeta) {
 }
 #endif
 
-bool wasm::DecodeModuleEnvironment(Decoder& d, CodeMetadata* codeMeta,
-                                   ModuleMetadata* moduleMeta) {
-  if (!DecodePreamble(d)) {
-    return false;
+bool wasm::DecodePreamble(Decoder& d, bool allowComponents, bool* isComponent) {
+  if (d.bytesRemain() > MaxModuleBytes) {
+    return d.fail("module too big");
   }
 
+  uint32_t magic;
+  if (!d.readFixedU32(&magic) || magic != MagicNumber) {
+    return d.fail("failed to match magic number");
+  }
+
+  uint32_t version;
+  if (!d.readFixedU32(&version)) {
+    return d.fail("failed to read version");
+  }
+
+#ifdef ENABLE_WASM_COMPONENTS
+  if (allowComponents && version == EncodingVersionComponent) {
+    *isComponent = true;
+    return true;
+  }
+#endif
+
+  if (version != EncodingVersionCoreModule) {
+    return d.failf("binary version 0x%" PRIx32
+                   " does not match expected version 0x%" PRIx32,
+                   version, EncodingVersionCoreModule);
+  }
+  *isComponent = false;
+  return true;
+}
+
+bool wasm::DecodeModuleEnvironment(Decoder& d, CodeMetadata* codeMeta,
+                                   ModuleMetadata* moduleMeta) {
   if (!DecodeTypeSection(d, codeMeta)) {
     return false;
   }
@@ -4718,6 +4727,18 @@ bool wasm::Validate(JSContext* cx, const BytecodeSource& bytecode,
   MutableCodeMetadata codeMeta = moduleMeta->codeMeta;
 
   Decoder envDecoder(bytecode.envSpan(), bytecode.envRange().start, error);
+
+  bool isComponent;
+  if (!DecodePreamble(envDecoder, codeMeta->componentsEnabled(),
+                      &isComponent)) {
+    return false;
+  }
+  if (isComponent) {
+    envDecoder.fail(
+        "TODO: standalone validation of components is not supported");
+    return false;
+  }
+
   if (!DecodeModuleEnvironment(envDecoder, codeMeta, moduleMeta)) {
     return false;
   }

@@ -26,7 +26,8 @@ namespace js {
 namespace wasm {
 
 static const uint32_t MagicNumber = 0x6d736100;  // "\0asm"
-static const uint32_t EncodingVersion = 0x01;
+static const uint32_t EncodingVersionCoreModule = 0x01;
+static const uint32_t EncodingVersionComponent = 0x000d0001;
 
 enum class SectionId {
   Custom = 0,
