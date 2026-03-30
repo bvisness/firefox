@@ -4727,6 +4727,57 @@ bool wasm::DecodeModuleTail(Decoder& d, CodeMetadata* codeMeta,
   return true;
 }
 
+bool wasm::DecodeCoreInstance(Decoder& d, CoreInstanceDesc* desc) {
+  uint8_t exprType;
+  if (!d.readFixedU8(&exprType)) {
+    return false;
+  }
+
+  switch (exprType) {
+    case 0x00: {  // instantiate a previously-defined module
+      uint32_t moduleIndex;
+      if (!d.readVarU32(&moduleIndex)) {
+        return d.fail("expected core module index");
+      }
+      // TODO: Validate that the module index is valid
+
+      uint32_t numArgs;
+      if (!d.readVarU32(&numArgs)) {
+        return d.fail("expected number of instantiate arguments");
+      }
+      // TODO: Implementation limit for instantiate args?
+      for (uint32_t i = 0; i < numArgs; i++) {
+        CacheableName importName;
+        if (!DecodeName(d, &importName)) {
+          return d.fail("expected import name");
+        }
+        // TODO: Validate that the name corresponds to an import on the module
+
+        uint8_t instanceIndicator;
+        if (!d.readFixedU8(&instanceIndicator) || instanceIndicator != 0x12) {
+          return d.fail("expected core instance index");
+        }
+
+        uint32_t instanceIndex;
+        if (!d.readVarU32(&instanceIndex)) {
+          return d.fail("expected core instance index");
+        }
+
+        // TODO: Validate that the instance index is valid
+
+        // TODO: Store this on the component
+      }
+    } break;
+    case 0x01: {  // inline exports
+    } break;
+    default:
+      return d.failf("expected type of instance expression but got %d",
+                     exprType);
+  }
+
+  return true;
+}
+
 // Validate algorithm.
 
 bool wasm::Validate(JSContext* cx, const BytecodeSource& bytecode,

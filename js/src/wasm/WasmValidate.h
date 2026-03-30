@@ -170,6 +170,8 @@ using ValidatingOpIter = OpIter<ValidatingPolicy>;
 [[nodiscard]] bool Validate(JSContext* cx, const BytecodeSource& bytecode,
                             const FeatureOptions& options, UniqueChars* error);
 
+[[nodiscard]] bool DecodeCoreInstance(Decoder& d, CoreInstanceDesc* desc);
+
 struct NopOpDumper {
   void dumpOpBegin(OpBytes op) {}
   void dumpOpEnd() {}

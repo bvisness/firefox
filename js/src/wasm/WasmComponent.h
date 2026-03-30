@@ -26,6 +26,8 @@
 namespace js {
 namespace wasm {
 
+struct CoreInstanceDesc {};
+
 class Component : public JS::WasmComponent {
   // TODO: literally all of it
 

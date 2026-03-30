@@ -1034,12 +1034,6 @@ static SharedComponent CompileComponent(
   // TODO: Do I need this ComponentGenerator, or do I just need the Component?
   ComponentGenerator cg(error, warnings);
 
-  // TODO: This is failing to compile
-  // MutableComponent component = js_new<Component>();
-  // if (!component) {
-  //   return nullptr;
-  // }
-
   while (!d.done()) {
     uint8_t sectionID;
     if (!d.readFixedU8(&sectionID)) {
@@ -1070,7 +1064,6 @@ static SharedComponent CompileComponent(
         if (!DecodePreamble(moduleDecoder, true, false, &unused_)) {
           return nullptr;
         }
-
         SharedModule module = CompileModule(moduleDecoder, args, bytecode,
                                             error, warnings, listener);
         if (!module) {
@@ -1080,6 +1073,22 @@ static SharedComponent CompileComponent(
 
         MOZ_RELEASE_ASSERT(moduleDecoder.done());
         d.skip(sectionLength);
+      } break;
+      case 2: {  // vec(core:instance)
+        uint32_t numInstances;
+        if (!d.readVarU32(&numInstances)) {
+          d.fail("expected number of instances");
+          return nullptr;
+        }
+
+        // TODO: Implementation limit on number of instances
+
+        for (uint32_t i = 0; i < numInstances; i++) {
+          CoreInstanceDesc desc;
+          if (!DecodeCoreInstance(d, &desc)) {
+            return nullptr;
+          }
+        }
       } break;
       default: {
         d.failf("unexpected section ID %d", sectionID);
