@@ -1068,7 +1068,6 @@ static SharedComponent CompileComponent(
     }
   }
 
-  d.fail("task failed successfully!!");
   return cg.finishComponent();
 }
 

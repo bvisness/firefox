@@ -28,6 +28,10 @@ namespace wasm {
 
 class Component : public JS::WasmComponent {
   // TODO: literally all of it
+
+  // JS API and JS::WasmComponent implementation:
+  JSObject* createObject(JSContext* cx) const override;
+  JSObject* createObjectForAsmJS(JSContext* cx) const override;
 };
 
 using MutableComponent = RefPtr<Component>;

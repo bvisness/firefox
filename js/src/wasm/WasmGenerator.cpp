@@ -1561,8 +1561,11 @@ void ModuleGenerator::warnf(const char* msg, ...) {
 }
 
 SharedComponent ComponentGenerator::finishComponent() {
-  // TODO: Return literally anything else
-  return nullptr;
+  MutableComponent component = js_new<Component>();
+  if (!component) {
+    return nullptr;
+  }
+  return component;
 }
 
 size_t CompiledCode::sizeOfExcludingThis(

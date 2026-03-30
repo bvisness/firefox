@@ -23,7 +23,7 @@ assertErrorMessage(() => new WebAssembly.Component(new Uint8Array([
 
 new WebAssembly.Component(new Uint8Array([
   0, 0x61, 0x73, 0x6D,
-  1, 0, 0x0d, 0,
+  0x0d, 0, 1, 0,
 ]));
 // TODO: Test any introspection properties of the above component
 
