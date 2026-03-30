@@ -18,10 +18,12 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <inttypes.h>
 
 #include "js/Conversions.h"
 #include "js/Equality.h"
 #include "js/ForOfIterator.h"
+#include "js/friend/DumpFunctions.h"
 #include "js/PropertyAndElement.h"
 
 #ifndef __wasi__
@@ -1053,13 +1055,31 @@ static SharedComponent CompileComponent(
 
     switch (sectionID) {
       case 1: {  // core:module
-        // TODO: Do I need to make a new decoder with a smaller range? Probably.
-        SharedModule module =
-            CompileModule(d, args, bytecode, error, warnings, listener);
+        js::DumpFmt("Section length %d, remaining %zu\n", sectionLength,
+                    d.bytesRemain());
+        if (d.bytesRemain() < sectionLength) {
+          d.failf("invalid section length: expected %" PRIu64
+                  " bytes, but only %" PRIu64 " remain",
+                  uint64_t(sectionLength), uint64_t(d.bytesRemain()));
+          return nullptr;
+        }
+        BytecodeSpan moduleBytes(d.currentPosition(), sectionLength);
+        Decoder moduleDecoder(moduleBytes, d.currentOffset(), error, warnings);
+
+        bool unused_;
+        if (!DecodePreamble(moduleDecoder, true, false, &unused_)) {
+          return nullptr;
+        }
+
+        SharedModule module = CompileModule(moduleDecoder, args, bytecode,
+                                            error, warnings, listener);
         if (!module) {
           return nullptr;
         }
         // TODO: Do something with the module
+
+        MOZ_RELEASE_ASSERT(moduleDecoder.done());
+        d.skip(sectionLength);
       } break;
       default: {
         d.failf("unexpected section ID %d", sectionID);

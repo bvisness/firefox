@@ -459,6 +459,11 @@ class Decoder {
     return true;
   }
 
+  void skip(size_t numBytes) {
+    MOZ_ASSERT(numBytes <= bytesRemain());
+    cur_ += numBytes;
+  }
+
   // Fixed-size encoding operations simply copy the literal bytes (without
   // attempting to align).
 

@@ -27,6 +27,15 @@ new WebAssembly.Component(new Uint8Array([
 ]));
 // TODO: Test any introspection properties of the above component
 
+assertErrorMessage(() => new WebAssembly.Component(new Uint8Array([
+  0, 0x61, 0x73, 0x6D,
+  0x0d, 0, 1, 0,
+
+  0x01, 0x10, // core module section, section length too long
+    0x00, 0x61, 0x73, 0x6D,
+    0x01, 0x00, 0x00, 0x00,
+])), WebAssembly.CompileError, /invalid section length/);
+
 new WebAssembly.Component(wasmTextToBinary(`
 (component
   (core module)
