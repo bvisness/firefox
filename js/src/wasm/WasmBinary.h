@@ -459,11 +459,6 @@ class Decoder {
     return true;
   }
 
-  void skip(size_t numBytes) {
-    MOZ_ASSERT(numBytes <= bytesRemain());
-    cur_ += numBytes;
-  }
-
   // Fixed-size encoding operations simply copy the literal bytes (without
   // attempting to align).
 
@@ -546,6 +541,20 @@ class Decoder {
       return false;
     }
     cur_ += numBytes;
+    return true;
+  }
+
+  [[nodiscard]] bool readBytesSpan(uint32_t numBytes, BytecodeSpan* bytes,
+                                   size_t* offset = nullptr) {
+    size_t offset_ = currentOffset();
+    const uint8_t* data;
+    if (!readBytes(numBytes, &data)) {
+      return false;
+    }
+    *bytes = BytecodeSpan(data, numBytes);
+    if (offset) {
+      *offset = offset_;
+    }
     return true;
   }
 

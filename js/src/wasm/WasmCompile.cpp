@@ -1048,54 +1048,57 @@ static SharedComponent CompileComponent(
       return nullptr;
     }
 
-    switch (sectionID) {
-      case 1: {  // core:module
-        // TODO: Implementation limit on number of core modules (before parsing)
+    BytecodeSpan sectionBytes;
+    size_t sectionOffset;
+    if (!d.readBytesSpan(sectionLength, &sectionBytes, &sectionOffset)) {
+      d.failf("invalid section length: expected %" PRIu64
+              " bytes, but only %" PRIu64 " remain",
+              uint64_t(sectionLength), uint64_t(d.bytesRemain()));
+      return nullptr;
+    }
 
-        if (d.bytesRemain() < sectionLength) {
-          d.failf("invalid section length: expected %" PRIu64
-                  " bytes, but only %" PRIu64 " remain",
-                  uint64_t(sectionLength), uint64_t(d.bytesRemain()));
-          return nullptr;
-        }
-        BytecodeSpan moduleBytes(d.currentPosition(), sectionLength);
-        Decoder moduleDecoder(moduleBytes, d.currentOffset(), error, warnings);
+    // Decode the section with its own decoder.
+    {
+      Decoder d(sectionBytes, sectionOffset, error, warnings);
+      switch (sectionID) {
+        case 1: {  // core:module
+          // TODO: Implementation limit on number of core modules (before
+          // parsing)
 
-        bool unused_;
-        if (!DecodePreamble(moduleDecoder, true, false, &unused_)) {
-          return nullptr;
-        }
-        SharedModule module = CompileModule(moduleDecoder, args, bytecode,
-                                            error, warnings, listener);
-        if (!module) {
-          return nullptr;
-        }
-        if (!c->modules.append(module)) {
-          return nullptr;
-        }
-
-        MOZ_RELEASE_ASSERT(moduleDecoder.done());
-        d.skip(sectionLength);
-      } break;
-      case 2: {  // vec(core:instance)
-        uint32_t numInstances;
-        if (!d.readVarU32(&numInstances)) {
-          d.fail("expected number of instances");
-          return nullptr;
-        }
-
-        // TODO: Implementation limit on number of instances
-
-        for (uint32_t i = 0; i < numInstances; i++) {
-          if (!DecodeCoreInstance(d, c)) {
+          bool unused_;
+          if (!DecodePreamble(d, true, false, &unused_)) {
             return nullptr;
           }
+          SharedModule module =
+              CompileModule(d, args, bytecode, error, warnings, listener);
+          if (!module) {
+            return nullptr;
+          }
+          if (!c->modules.append(module)) {
+            return nullptr;
+          }
+        } break;
+        case 2: {  // vec(core:instance)
+          uint32_t numInstances;
+          if (!d.readVarU32(&numInstances)) {
+            d.fail("expected number of instances");
+            return nullptr;
+          }
+
+          // TODO: Implementation limit on number of instances
+
+          for (uint32_t i = 0; i < numInstances; i++) {
+            if (!DecodeCoreInstance(d, c)) {
+              return nullptr;
+            }
+          }
+        } break;
+        default: {
+          d.failf("unexpected section ID %d", sectionID);
+          return nullptr;
         }
-      } break;
-      default: {
-        d.failf("unexpected section ID %d", sectionID);
-        return nullptr;
       }
+      MOZ_RELEASE_ASSERT(d.done());
     }
   }
 
