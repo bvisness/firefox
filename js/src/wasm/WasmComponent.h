@@ -22,6 +22,8 @@
 #include "js/WasmComponent.h"
 
 #include "mozilla/RefPtr.h"
+#include "mozilla/Vector.h"
+#include "wasm/WasmModule.h"
 
 namespace js {
 namespace wasm {
@@ -29,11 +31,14 @@ namespace wasm {
 struct CoreInstanceDesc {};
 
 class Component : public JS::WasmComponent {
-  // TODO: literally all of it
+  using ModuleVector = mozilla::Vector<SharedModule, 0, SystemAllocPolicy>;
 
   // JS API and JS::WasmComponent implementation:
   JSObject* createObject(JSContext* cx) const override;
   JSObject* createObjectForAsmJS(JSContext* cx) const override;
+
+ public:
+  ModuleVector modules;
 };
 
 using MutableComponent = RefPtr<Component>;

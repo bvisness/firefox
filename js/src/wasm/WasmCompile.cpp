@@ -23,7 +23,6 @@
 #include "js/Conversions.h"
 #include "js/Equality.h"
 #include "js/ForOfIterator.h"
-#include "js/friend/DumpFunctions.h"
 #include "js/PropertyAndElement.h"
 
 #ifndef __wasi__
@@ -1031,8 +1030,10 @@ static SharedComponent CompileComponent(
     Decoder& d, const CompileArgs& args, const BytecodeBufferOrSource& bytecode,
     UniqueChars* error, UniqueCharsVector* warnings,
     JS::OptimizedEncodingListener* listener) {
-  // TODO: Do I need this ComponentGenerator, or do I just need the Component?
-  ComponentGenerator cg(error, warnings);
+  MutableComponent c = js_new<Component>();
+  if (!c) {
+    return nullptr;
+  }
 
   while (!d.done()) {
     uint8_t sectionID;
@@ -1049,8 +1050,8 @@ static SharedComponent CompileComponent(
 
     switch (sectionID) {
       case 1: {  // core:module
-        js::DumpFmt("Section length %d, remaining %zu\n", sectionLength,
-                    d.bytesRemain());
+        // TODO: Implementation limit on number of core modules (before parsing)
+
         if (d.bytesRemain() < sectionLength) {
           d.failf("invalid section length: expected %" PRIu64
                   " bytes, but only %" PRIu64 " remain",
@@ -1069,7 +1070,9 @@ static SharedComponent CompileComponent(
         if (!module) {
           return nullptr;
         }
-        // TODO: Do something with the module
+        if (!c->modules.append(module)) {
+          return nullptr;
+        }
 
         MOZ_RELEASE_ASSERT(moduleDecoder.done());
         d.skip(sectionLength);
@@ -1084,8 +1087,7 @@ static SharedComponent CompileComponent(
         // TODO: Implementation limit on number of instances
 
         for (uint32_t i = 0; i < numInstances; i++) {
-          CoreInstanceDesc desc;
-          if (!DecodeCoreInstance(d, &desc)) {
+          if (!DecodeCoreInstance(d, c)) {
             return nullptr;
           }
         }
@@ -1097,7 +1099,7 @@ static SharedComponent CompileComponent(
     }
   }
 
-  return cg.finishComponent();
+  return c;
 }
 
 SharedModuleOrComponent wasm::CompileBuffer(

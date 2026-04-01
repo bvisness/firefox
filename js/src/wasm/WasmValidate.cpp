@@ -4727,7 +4727,7 @@ bool wasm::DecodeModuleTail(Decoder& d, CodeMetadata* codeMeta,
   return true;
 }
 
-bool wasm::DecodeCoreInstance(Decoder& d, CoreInstanceDesc* desc) {
+bool wasm::DecodeCoreInstance(Decoder& d, MutableComponent& c) {
   uint8_t exprType;
   if (!d.readFixedU8(&exprType)) {
     return false;
@@ -4739,7 +4739,9 @@ bool wasm::DecodeCoreInstance(Decoder& d, CoreInstanceDesc* desc) {
       if (!d.readVarU32(&moduleIndex)) {
         return d.fail("expected core module index");
       }
-      // TODO: Validate that the module index is valid
+      if (moduleIndex >= c->modules.length()) {
+        return d.failf("invalid core module index %d", moduleIndex);
+      }
 
       uint32_t numArgs;
       if (!d.readVarU32(&numArgs)) {
@@ -4764,6 +4766,9 @@ bool wasm::DecodeCoreInstance(Decoder& d, CoreInstanceDesc* desc) {
         }
 
         // TODO: Validate that the instance index is valid
+
+        // TODO: Validate that the instance's exports satisfy the module's
+        // imports
 
         // TODO: Store this on the component
       }

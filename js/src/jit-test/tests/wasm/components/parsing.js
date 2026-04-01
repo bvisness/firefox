@@ -50,3 +50,71 @@ new WebAssembly.Component(wasmTextToBinary(`
 )
 `));
 // TODO: Test any introspection properties of the above component
+
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (core module)
+  (core instance (instantiate 1))
+)
+`)), WebAssembly.CompileError, /invalid core module index 1/);
+// TODO: Test any introspection properties of the above component
+
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (core module)
+  (core module)
+  (core instance (instantiate 0))
+  (core instance (instantiate 1))
+)
+`));
+// TODO: Test any introspection properties of the above component
+
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (core module
+    (func (export "add") (param i32 i32) (result i32)
+      (i32.add (local.get 0) (local.get 1))
+    )
+  )
+  (core module
+    (func (export "sub") (param i32 i32) (result i32)
+      (i32.sub (local.get 0) (local.get 1))
+    )
+  )
+
+  (export "adder" (core module 1))
+  (export "subber" (core module 2))
+)
+`));
+// TODO: Test any introspection properties of the above component
+
+throw "TODO: Not implemented beyond this point";
+
+new WebAssembly.Component(wasmTextToBinary(`
+  (component
+  (type (func (param "a" s32) (param "b" s32) (result s32)))
+
+  (core module
+    (func (export "add_impl") (param i32 i32) (result i32)
+      (i32.add (local.get 0) (local.get 1))
+    )
+  )
+  (core module
+    (func (export "sub_impl") (param i32 i32) (result i32)
+      (i32.sub (local.get 0) (local.get 1))
+    )
+  )
+
+  (core instance (instantiate 0))
+  (core instance (instantiate 1))
+
+  (alias core export 0 "add_impl" (core func))
+  (alias core export 1 "sub_impl" (core func))
+  (func (type 0) (canon lift (core func 0)))
+  (func (type 0) (canon lift (core func 1)))
+
+  (export "add" (func 0))
+  (export "sub" (func 1))
+)
+`));
+// TODO: Test any introspection properties of the above component

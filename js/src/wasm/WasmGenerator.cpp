@@ -1560,14 +1560,6 @@ void ModuleGenerator::warnf(const char* msg, ...) {
   (void)warnings_->append(std::move(str));
 }
 
-SharedComponent ComponentGenerator::finishComponent() {
-  MutableComponent component = js_new<Component>();
-  if (!component) {
-    return nullptr;
-  }
-  return component;
-}
-
 size_t CompiledCode::sizeOfExcludingThis(
     mozilla::MallocSizeOf mallocSizeOf) const {
   return funcs.sizeOfExcludingThis(mallocSizeOf) +
