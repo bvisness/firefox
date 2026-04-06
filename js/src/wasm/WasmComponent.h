@@ -30,6 +30,55 @@ namespace wasm {
 
 struct CoreInstanceDesc {};
 
+class ComponentExternDesc {
+  ComponentSort kind_;
+
+  // Used for kinds CoreModule, Component, Instance, and the `eq` case of Type.
+  uint32_t typeIndex_;
+
+  explicit ComponentExternDesc(ComponentSort kind) : kind_(kind) {
+    MOZ_ASSERT(ComponentSortValidForExternDesc(kind));
+  }
+
+ public:
+  ComponentExternDesc() = default;
+
+  static ComponentExternDesc func(uint32_t funcIdx) {
+    ComponentExternDesc desc(ComponentSort::Func);
+    desc.typeIndex_ = funcIdx;
+    return desc;
+  }
+  static ComponentExternDesc coreModule(uint32_t typeIdx) {
+    ComponentExternDesc desc(ComponentSort::CoreModule);
+    desc.typeIndex_ = typeIdx;
+    return desc;
+  }
+};
+
+class ComponentExport {
+ public:
+  struct CacheablePod {
+    ComponentSort sort_;
+    uint32_t index_;
+
+    WASM_CHECK_CACHEABLE_POD(sort_, index_);
+  };
+
+ private:
+  CacheableName name_;
+  CacheableName versionSuffix_;
+  CacheablePod pod;
+
+ public:
+  ComponentExport() = default;
+  explicit ComponentExport(CacheableName&& name, uint32_t index,
+                           ComponentSort sort, CacheableName&& versonSuffix);
+
+  ComponentExternDesc implicitExternDesc(Component& c);
+};
+
+using ComponentExportVector = Vector<ComponentExport, 0, SystemAllocPolicy>;
+
 class Component : public JS::WasmComponent {
   using ModuleVector = mozilla::Vector<SharedModule, 0, SystemAllocPolicy>;
 
@@ -39,6 +88,7 @@ class Component : public JS::WasmComponent {
 
  public:
   ModuleVector modules;
+  ComponentExportVector exports;
 };
 
 using MutableComponent = RefPtr<Component>;

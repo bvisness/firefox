@@ -1093,12 +1093,30 @@ static SharedComponent CompileComponent(
             }
           }
         } break;
+        case 11: {  // vec(export)
+          uint32_t numExports;
+          if (!d.readVarU32(&numExports)) {
+            d.fail("expected number of exports");
+            return nullptr;
+          }
+          // TODO: Implementation limit on number of exports
+
+          for (uint32_t i = 0; i < numExports; i++) {
+            if (!DecodeComponentExport(d, c)) {
+              return nullptr;
+            }
+          }
+        } break;
         default: {
           d.failf("unexpected section ID %d", sectionID);
           return nullptr;
         }
       }
-      MOZ_RELEASE_ASSERT(d.done());
+
+      if (!d.done()) {
+        d.failf("too many bytes in section (%zu extra)", d.bytesRemain());
+        return nullptr;
+      }
     }
   }
 

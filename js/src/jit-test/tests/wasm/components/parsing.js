@@ -82,8 +82,8 @@ new WebAssembly.Component(wasmTextToBinary(`
     )
   )
 
-  (export "adder" (core module 1))
-  (export "subber" (core module 2))
+  (export "adder" (core module 0))
+  (export "subber" (core module 1))
 )
 `));
 // TODO: Test any introspection properties of the above component

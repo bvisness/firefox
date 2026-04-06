@@ -1304,6 +1304,34 @@ enum class CompileState {
 
 enum class DebugEnabled { False, True };
 
+// A "sort", or "kind", of item in the component model, used for all cases where
+// we must refer to a different item.
+//
+// This type is also used for the `externdesc` type, whose cases are a subset of
+// `sort`. Types that are invalid for `externdesc` have the highest bit set.
+enum class ComponentSort : uint8_t {
+  Func = 0x01,
+  Value = 0x02,
+  Type = 0x03,
+  Component = 0x04,
+  Instance = 0x05,
+
+  CoreFunction = 0x80 | int(DefinitionKind::Function),
+  CoreTable = 0x80 | int(DefinitionKind::Table),
+  CoreMemory = 0x80 | int(DefinitionKind::Memory),
+  CoreGlobal = 0x80 | int(DefinitionKind::Global),
+  // CoreTag = 0x80 | int(DefinitionKind::Tag),
+  // TODO: Why are tags not supported in the component binary format?
+
+  CoreType = 0x80 | 0x10,
+  CoreModule = 0x11,
+  CoreInstance = 0x80 | 0x12,
+};
+
+static inline bool ComponentSortValidForExternDesc(ComponentSort sort) {
+  return (uint8_t(sort) & 0x80) == 0;
+}
+
 }  // namespace wasm
 }  // namespace js
 

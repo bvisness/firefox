@@ -4783,6 +4783,202 @@ bool wasm::DecodeCoreInstance(Decoder& d, MutableComponent& c) {
   return true;
 }
 
+[[nodiscard]] static bool DecodeComponentSort(Decoder& d, ComponentSort* sort,
+                                              bool forExterndesc) {
+  uint8_t kind;
+  if (!d.readFixedU8(&kind)) {
+    return d.fail("expected sort");
+  }
+
+  switch (kind) {
+    case 0x00: {
+      uint8_t coreSort;
+      if (!d.readFixedU8(&coreSort)) {
+        return d.fail("expected core sort");
+      }
+
+      switch (coreSort) {
+        case 0x00: {
+          *sort = ComponentSort::CoreFunction;
+        } break;
+        case 0x01: {
+          *sort = ComponentSort::CoreTable;
+        } break;
+        case 0x02: {
+          *sort = ComponentSort::CoreMemory;
+        } break;
+        case 0x03: {
+          *sort = ComponentSort::CoreGlobal;
+        } break;
+        case 0x10: {
+          *sort = ComponentSort::CoreType;
+        } break;
+        case 0x11: {
+          *sort = ComponentSort::CoreModule;
+        } break;
+        case 0x12: {
+          *sort = ComponentSort::CoreInstance;
+        } break;
+        default:
+          return d.failf("unexpected core externtype %d", coreSort);
+      }
+    } break;
+    case 0x01: {
+      *sort = ComponentSort::Func;
+    } break;
+    case 0x02: {
+      *sort = ComponentSort::Value;
+    } break;
+    case 0x03: {
+      *sort = ComponentSort::Type;
+    } break;
+    case 0x04: {
+      *sort = ComponentSort::Component;
+    } break;
+    case 0x05: {
+      *sort = ComponentSort::Instance;
+    } break;
+    default:
+      return d.failf("unexpected sort 0x%02x", kind);
+  }
+
+  if (forExterndesc && !ComponentSortValidForExternDesc(*sort)) {
+    return d.failf("unexpected sort 0x%02x", kind);
+  }
+
+  return true;
+}
+
+bool DecodeComponentExternDesc(Decoder& d, ComponentExternDesc* desc) {
+  ComponentSort kind;
+  if (!DecodeComponentSort(d, &kind, /*forExterndesc=*/true)) {
+    return false;
+  }
+
+  switch (kind) {
+    case ComponentSort::Func: {
+      uint32_t funcIdx;
+      if (!d.readVarU32(&funcIdx)) {
+        return d.fail("expected func index");
+      }
+      *desc = ComponentExternDesc::func(funcIdx);
+    } break;
+    case ComponentSort::Value: {
+      return d.fail("TODO: extern values are not supported yet");
+    } break;
+    case ComponentSort::Type: {
+      return d.fail("TODO: extern types are not supported yet");
+    } break;
+    case ComponentSort::Component: {
+      return d.fail("TODO: extern components are not supported yet");
+    } break;
+    case ComponentSort::Instance: {
+      return d.fail("TODO: extern instances are not supported yet");
+    } break;
+    case ComponentSort::CoreModule: {
+      return d.fail("TODO: extern core modules are not supported yet");
+    } break;
+    default:
+      MOZ_CRASH();
+  }
+
+  *desc = ComponentExternDesc::func(0);
+  return true;
+}
+
+bool wasm::DecodeComponentExport(Decoder& d, MutableComponent& c) {
+  uint8_t exportFlags;
+  if (!d.readFixedU8(&exportFlags)) {
+    return d.fail("expected export flags");
+  }
+  if (exportFlags > 0x01) {
+    return d.failf("invalid export flags %#x", exportFlags);
+  }
+
+  CacheableName exportName;
+  if (!DecodeName(d, &exportName)) {
+    return d.fail("expected export name");
+  }
+  // TODO: Validate that this name is strongly-unique
+  // TODO: Validate that the name is well-formed (perhaps this should be lifted
+  // to a utility like DecodeComponentName)
+
+  CacheableName versionSuffix;
+  if (exportFlags == 0x01) {
+    if (!DecodeName(d, &versionSuffix)) {
+      return d.fail("expected version suffix");
+    }
+  }
+
+  ComponentSort exportType;
+  if (!DecodeComponentSort(d, &exportType, /*forExterndesc=*/true)) {
+    return false;
+  }
+
+  uint32_t exportIndex;
+  if (!d.readVarU32(&exportIndex)) {
+    return d.fail("expected export index");
+  }
+
+  // Validate that the index is in range
+  const char* kindStr = "";
+  size_t numItems = 0;
+  switch (exportType) {
+    case ComponentSort::Func: {
+      return d.fail("TODO: exported funcs are not supported yet");
+    } break;
+    case ComponentSort::Value: {
+      return d.fail("TODO: exported values are not supported yet");
+    } break;
+    case ComponentSort::Type: {
+      return d.fail("TODO: exported types are not supported yet");
+    } break;
+    case ComponentSort::Component: {
+      return d.fail("TODO: exported components are not supported yet");
+    } break;
+    case ComponentSort::Instance: {
+      return d.fail("TODO: exported core instances are not supported yet");
+    } break;
+    case ComponentSort::CoreModule: {
+      kindStr = "core module";
+      numItems = c->modules.length();
+    } break;
+    default:
+      MOZ_CRASH("all cases from DecodeComponentSort should have been handled");
+  }
+  if (exportIndex >= numItems) {
+    return d.failf("invalid %s index %d (max %zu)", kindStr, exportIndex,
+                   numItems);
+  }
+
+  uint8_t hasExplicitExternDesc;
+  if (!d.readFixedU8(&hasExplicitExternDesc) || hasExplicitExternDesc > 0x01) {
+    return d.fail("expected possible explicit external type");
+  }
+  if (hasExplicitExternDesc) {
+    ComponentExternDesc explicitExternDesc;
+    if (!DecodeComponentExternDesc(d, &explicitExternDesc)) {
+    }
+  }
+
+  // TODO: Validate that all resource types used (transitively!) in the exported
+  // thing's type came from a preceding import or were previously exported.
+
+  // TODO: Validate all the naming-related conditions
+
+  // TODO: Validate that versionSuffix "is preceded by an interfaceversion
+  // matching canonversion and that the concatenation of the canonversion and
+  // the versionsuffix results in a valid semver as defined by
+  // https://semver.org." I have no idea what this could possibly mean.
+
+  if (!c->exports.emplaceBack(std::move(exportName), exportIndex, exportType,
+                              std::move(versionSuffix))) {
+    return false;
+  }
+
+  return true;
+}
+
 // Validate algorithm.
 
 bool wasm::Validate(JSContext* cx, const BytecodeSource& bytecode,

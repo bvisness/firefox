@@ -29,6 +29,16 @@
 using namespace js;
 using namespace js::wasm;
 
+ComponentExport::ComponentExport(CacheableName&& fieldName, uint32_t index,
+                                 ComponentSort sort,
+                                 CacheableName&& versionSuffix)
+    : name_(std::move(fieldName)), versionSuffix_(std::move(versionSuffix)) {
+  pod.sort_ = sort;
+  pod.index_ = index;
+}
+
+ComponentExternDesc ComponentExport::implicitExternDesc(Component& c) {}
+
 /* virtual */
 JSObject* Component::createObject(JSContext* cx) const {
   if (!GlobalObject::ensureConstructor(cx, cx->global(), JSProto_WebAssembly)) {
