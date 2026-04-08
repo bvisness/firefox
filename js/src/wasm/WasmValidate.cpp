@@ -4886,6 +4886,86 @@ bool DecodeComponentExternDesc(Decoder& d, ComponentExternDesc* desc) {
   return true;
 }
 
+bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
+  uint8_t kind;
+  if (!d.readFixedU8(&kind)) {
+    return d.fail("expected type kind");
+  }
+
+  switch (kind) {
+    case 0x7f:
+    case 0x7e:
+    case 0x7d:
+    case 0x7c:
+    case 0x7b:
+    case 0x7a:
+    case 0x79:
+    case 0x78:
+    case 0x77:
+    case 0x76:
+    case 0x75:
+    case 0x74:
+    case 0x73: {
+      if (!c->types.append(
+              ComponentDefType::primitive(ComponentTypeKind(kind)))) {
+        return false;
+      }
+    } break;
+    case 0x72: {  // record
+      ComponentRecordFieldVector fields;
+
+      uint32_t numFields;
+      if (!d.readVarU32(&numFields)) {
+        return d.fail("expected number of record fields");
+      }
+
+      // TODO: Implementation limit on number of record fields
+      if (!fields.reserve(numFields)) {
+        return false;
+      }
+
+      for (uint32_t i = 0; i < numFields; i++) {
+        CacheableName name;
+        if (!DecodeName(d, &name)) {
+          return d.fail("expected record field name");
+        }
+
+        // Types in the binary are organized so that negative numbers are
+        // primitives, while positive numbers are type indices.
+        uint8_t typeFirstByte;
+        int32_t type;
+        if (!d.peekByte(&typeFirstByte) || !d.readVarS32(&type)) {
+          return d.fail("expected record field type");
+        }
+        if (type < 0) {
+          fields.infallibleEmplaceBack(
+              std::move(name),
+              ComponentValType::primitive(ComponentTypeKind(typeFirstByte)));
+        } else {
+          if (c->types.length() <= size_t(type)) {
+            return d.failf("invalid type index %d", type);
+          }
+          ComponentDefType& foo = c->types[type];
+          if (!ComponentTypeKindIsValueType(foo.kind())) {
+            return d.failf("type %d is not a value type", type);
+          }
+
+          fields.infallibleEmplaceBack(std::move(name),
+                                       ComponentValType::typeIndex(type));
+        }
+      }
+
+      if (!c->types.append(ComponentDefType::record(std::move(fields)))) {
+        return false;
+      }
+    } break;
+    default:
+      return d.failf("unexpected type 0x%02x", kind);
+  }
+
+  return true;
+}
+
 bool wasm::DecodeComponentExport(Decoder& d, MutableComponent& c) {
   uint8_t exportFlags;
   if (!d.readFixedU8(&exportFlags)) {
@@ -4922,7 +5002,7 @@ bool wasm::DecodeComponentExport(Decoder& d, MutableComponent& c) {
 
   // Validate that the index is in range
   const char* kindStr = "";
-  size_t numItems = 0;
+  uint32_t numItems = 0;
   switch (exportType) {
     case ComponentSort::Func: {
       return d.fail("TODO: exported funcs are not supported yet");
@@ -4947,8 +5027,7 @@ bool wasm::DecodeComponentExport(Decoder& d, MutableComponent& c) {
       MOZ_CRASH("all cases from DecodeComponentSort should have been handled");
   }
   if (exportIndex >= numItems) {
-    return d.failf("invalid %s index %d (max %zu)", kindStr, exportIndex,
-                   numItems);
+    return d.failf("invalid %s index %d", kindStr, exportIndex);
   }
 
   uint8_t hasExplicitExternDesc;

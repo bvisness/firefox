@@ -171,6 +171,7 @@ using ValidatingOpIter = OpIter<ValidatingPolicy>;
                             const FeatureOptions& options, UniqueChars* error);
 
 [[nodiscard]] bool DecodeCoreInstance(Decoder& d, MutableComponent& c);
+[[nodiscard]] bool DecodeComponentType(Decoder& d, MutableComponent& c);
 [[nodiscard]] bool DecodeComponentExport(Decoder& d, MutableComponent& c);
 
 struct NopOpDumper {

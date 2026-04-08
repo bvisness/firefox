@@ -1093,6 +1093,21 @@ static SharedComponent CompileComponent(
             }
           }
         } break;
+        case 7: {  // vec(type)
+          uint32_t numTypes;
+          if (!d.readVarU32(&numTypes)) {
+            d.fail("expected number of types");
+            return nullptr;
+          }
+
+          // TODO: Implementation limit on number of types
+
+          for (uint32_t i = 0; i < numTypes; i++) {
+            if (!DecodeComponentType(d, c)) {
+              return nullptr;
+            }
+          }
+        } break;
         case 11: {  // vec(export)
           uint32_t numExports;
           if (!d.readVarU32(&numExports)) {
