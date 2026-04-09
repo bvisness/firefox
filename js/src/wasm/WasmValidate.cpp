@@ -4886,6 +4886,33 @@ bool DecodeComponentExternDesc(Decoder& d, ComponentExternDesc* desc) {
   return true;
 }
 
+static mozilla::Maybe<ComponentValType> DecodeComponentValType(
+    Decoder& d, MutableComponent& c) {
+  // Types in the binary are organized so that negative numbers are
+  // primitives, while positive numbers are type indices.
+  uint8_t typeFirstByte;
+  int32_t type;
+  if (!d.peekByte(&typeFirstByte) || !d.readVarS32(&type)) {
+    d.fail("expected value type");
+    return mozilla::Nothing();
+  }
+  if (type < 0) {
+    return mozilla::Some(
+        ComponentValType::primitive(ComponentTypeKind(typeFirstByte)));
+  } else {
+    if (c->types.length() <= size_t(type)) {
+      d.failf("invalid type index %d", type);
+      return mozilla::Nothing();
+    }
+    ComponentDefType& foo = c->types[type];
+    if (!ComponentTypeKindIsValueType(foo.kind())) {
+      d.failf("type %d is not a value type", type);
+      return mozilla::Nothing();
+    }
+    return mozilla::Some(ComponentValType::typeIndex(type));
+  }
+}
+
 bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
   uint8_t kind;
   if (!d.readFixedU8(&kind)) {
@@ -4911,6 +4938,7 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
         return false;
       }
     } break;
+
     case 0x72: {  // record
       ComponentRecordFieldVector fields;
 
@@ -4929,36 +4957,72 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
         if (!DecodeName(d, &name)) {
           return d.fail("expected record field name");
         }
-
-        // Types in the binary are organized so that negative numbers are
-        // primitives, while positive numbers are type indices.
-        uint8_t typeFirstByte;
-        int32_t type;
-        if (!d.peekByte(&typeFirstByte) || !d.readVarS32(&type)) {
-          return d.fail("expected record field type");
+        mozilla::Maybe<ComponentValType> type = DecodeComponentValType(d, c);
+        if (type.isNothing()) {
+          return false;
         }
-        if (type < 0) {
-          fields.infallibleEmplaceBack(
-              std::move(name),
-              ComponentValType::primitive(ComponentTypeKind(typeFirstByte)));
-        } else {
-          if (c->types.length() <= size_t(type)) {
-            return d.failf("invalid type index %d", type);
-          }
-          ComponentDefType& foo = c->types[type];
-          if (!ComponentTypeKindIsValueType(foo.kind())) {
-            return d.failf("type %d is not a value type", type);
-          }
 
-          fields.infallibleEmplaceBack(std::move(name),
-                                       ComponentValType::typeIndex(type));
-        }
+        fields.infallibleAppend(
+            ComponentRecordField(std::move(name), std::move(*type)));
       }
 
       if (!c->types.append(ComponentDefType::record(std::move(fields)))) {
         return false;
       }
     } break;
+
+    case 0x40:
+    case 0x43: {  // functype (possibly async)
+      ComponentFuncType ft;
+      ft.isAsync = kind == 0x43;
+
+      uint32_t numParams;
+      if (!d.readVarU32(&numParams)) {
+        return d.fail("expected number of params");
+      }
+      if (!ft.paramTypes.reserve(numParams) ||
+          !ft.paramNames.reserve(numParams)) {
+        return false;
+      }
+
+      for (uint32_t i = 0; i < numParams; i++) {
+        CacheableName name;
+        if (!DecodeName(d, &name)) {
+          return d.fail("expected param name");
+        }
+        mozilla::Maybe<ComponentValType> type = DecodeComponentValType(d, c);
+        if (type.isNothing()) {
+          return false;
+        }
+
+        ft.paramNames.infallibleAppend(std::move(name));
+        ft.paramTypes.infallibleAppend(std::move(*type));
+      }
+
+      // There is a result type if the byte is zero. Don't ask.
+      uint8_t hasntResultType;
+      if (!d.readFixedU8(&hasntResultType)) {
+        return d.fail("expected result type");
+      }
+      if (hasntResultType == 0) {
+        mozilla::Maybe<ComponentValType> resultType =
+            DecodeComponentValType(d, c);
+        if (resultType.isNothing()) {
+          return false;
+        }
+        ft.resultType = resultType;
+      } else if (hasntResultType == 1) {
+        // hasn't indeed
+      } else {
+        return d.failf("unexpected result type indicator 0x%02x",
+                       hasntResultType);
+      }
+
+      if (!c->types.append(ComponentDefType::func(std::move(ft)))) {
+        return false;
+      }
+    } break;
+
     default:
       return d.failf("unexpected type 0x%02x", kind);
   }

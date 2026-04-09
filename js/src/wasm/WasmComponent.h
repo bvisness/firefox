@@ -55,10 +55,10 @@ enum class ComponentTypeKind {
   Own = 0x69,
   Borrow = 0x68,
 
-  FuncType = 0x40,  // async func types are not a separate kind
-  ComponentType = 0x41,
-  InstanceType = 0x42,
-  ResourceType = 0x3f,  // resource types with callbacks are not a separate kind
+  Func = 0x40,  // async func types are not a separate kind
+  Component = 0x41,
+  Instance = 0x42,
+  Resource = 0x3f,  // resource types with callbacks are not a separate kind
 };
 
 inline bool ComponentTypeKindIsPrimitive(ComponentTypeKind kind) {
@@ -125,6 +125,13 @@ struct ComponentResultType {
   mozilla::Maybe<ComponentValType> errorType;
 };
 
+struct ComponentFuncType {
+  ComponentValTypeVector paramTypes;
+  CacheableNameVector paramNames;
+  mozilla::Maybe<ComponentValType> resultType;
+  bool isAsync;
+};
+
 class ComponentDefType {
   ComponentTypeKind kind_;
 
@@ -136,7 +143,9 @@ class ComponentDefType {
                                      ComponentValTypeVector,  // tuple
                                      CacheableNameVector,     // flags, enum
                                      ComponentResultType,     // result
-                                     uint32_t                 // own, borrow
+                                     uint32_t,                // own, borrow
+
+                                     ComponentFuncType  // func
                                      >;
   TypeProps props_;
 
@@ -144,6 +153,8 @@ class ComponentDefType {
       : kind_(kind), props_(mozilla::Nothing()) {}
   explicit ComponentDefType(ComponentRecordFieldVector&& fields)
       : kind_(ComponentTypeKind::Record), props_(std::move(fields)) {}
+  explicit ComponentDefType(ComponentFuncType&& funcType)
+      : kind_(ComponentTypeKind::Func), props_(std::move(funcType)) {}
 
  public:
   static ComponentDefType primitive(ComponentTypeKind kind) {
@@ -152,6 +163,9 @@ class ComponentDefType {
   }
   static ComponentDefType record(ComponentRecordFieldVector&& fields) {
     return ComponentDefType(std::move(fields));
+  }
+  static ComponentDefType func(ComponentFuncType&& ft) {
+    return ComponentDefType(std::move(ft));
   }
 
   ComponentTypeKind kind() const { return kind_; }

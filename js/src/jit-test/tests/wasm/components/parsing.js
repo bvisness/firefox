@@ -108,6 +108,12 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 )
 `)), WebAssembly.CompileError, /invalid type index/);
 
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (func (param "a" s32) (param "b" s32) (result s32)))
+)
+`));
+
 throw "TODO: Not implemented beyond this point";
 
 new WebAssembly.Component(wasmTextToBinary(`

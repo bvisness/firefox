@@ -37,7 +37,9 @@ ComponentExport::ComponentExport(CacheableName&& fieldName, uint32_t index,
   pod.index_ = index;
 }
 
-ComponentExternDesc ComponentExport::implicitExternDesc(Component& c) {}
+ComponentExternDesc ComponentExport::implicitExternDesc(Component& c) {
+  MOZ_CRASH("TODO");
+}
 
 /* virtual */
 JSObject* Component::createObject(JSContext* cx) const {
