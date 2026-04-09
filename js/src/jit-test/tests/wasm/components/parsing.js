@@ -114,6 +114,16 @@ new WebAssembly.Component(wasmTextToBinary(`
 )
 `));
 
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (record
+    (field "foo" f64)
+    (field "bar" bool)
+  ))
+  (type (func (param "a" 0) (param "b" 0)))
+)
+`));
+
 throw "TODO: Not implemented beyond this point";
 
 new WebAssembly.Component(wasmTextToBinary(`

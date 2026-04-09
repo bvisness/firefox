@@ -5012,7 +5012,11 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
         }
         ft.resultType = resultType;
       } else if (hasntResultType == 1) {
-        // hasn't indeed
+        // hasn't indeed. Consume an extra zero for some reason.
+        uint8_t dummy;
+        if (!d.readFixedU8(&dummy) || dummy != 0) {
+          return d.fail("expected result type");
+        }
       } else {
         return d.failf("unexpected result type indicator 0x%02x",
                        hasntResultType);
