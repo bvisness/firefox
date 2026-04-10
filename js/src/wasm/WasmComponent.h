@@ -266,6 +266,20 @@ class ComponentAlias {
   uint32_t itemIndex() const { return innerIdx_; }
 };
 
+struct ComponentCanonOpt {
+  // TODO
+};
+
+using ComponentCanonOptVector =
+    mozilla::Vector<ComponentCanonOpt, 0, SystemAllocPolicy>;
+
+struct ComponentLiftedFuncDesc {
+  // TODO: Actually store something useful here. I'm not sure at the moment if
+  // it makes sense to store the raw index, options, and dest type, or to store
+  // some kind of new value here. It will all depend on what instantiation
+  // actually looks like. So not touching it for now.
+};
+
 struct CoreInstanceInstantiateArg {
   CacheableName name;
   uint32_t instanceIdx;
@@ -362,6 +376,8 @@ class Component : public JS::WasmComponent {
   using CoreInstanceVector =
       mozilla::Vector<CoreInstanceDesc, 0, SystemAllocPolicy>;
   using TypeVector = mozilla::Vector<ComponentDefType, 0, SystemAllocPolicy>;
+  using FuncVector =
+      mozilla::Vector<ComponentLiftedFuncDesc, 0, SystemAllocPolicy>;
   using ExportVector = Vector<ComponentExport, 0, SystemAllocPolicy>;
   using AliasVector = Vector<ComponentAlias, 0, SystemAllocPolicy>;
 
@@ -373,6 +389,7 @@ class Component : public JS::WasmComponent {
   CoreModuleVector coreModules;
   CoreInstanceVector coreInstances;
   TypeVector types;
+  FuncVector funcs;
   ExportVector exports;
 
   AliasVector coreFuncs;  // TODO: This will have to accommodate lowered funcs

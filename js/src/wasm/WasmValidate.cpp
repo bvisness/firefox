@@ -5157,13 +5157,81 @@ bool wasm::DecodeComponentAlias(Decoder& d, MutableComponent& c) {
         default:
           return d.failf("invalid alias sort 0x%02x", sort);
       }
-
     } break;
     case 0x02: {  // outer ct:<u32> idx:<u32>
       return d.fail("TODO: outer aliases are not yet supported");
     } break;
     default:
       return d.failf("unexpected alias target 0x%02x", targetType);
+  }
+
+  return true;
+}
+
+static bool DecodeCanonOpts(Decoder& d, ComponentCanonOptVector* opts) {
+  uint32_t count;
+  if (!d.readVarU32(&count)) {
+    return d.fail("expected number of canonopts");
+  }
+
+  for (uint32_t i = 0; i < count; i++) {
+    uint8_t kind;
+    if (!d.readFixedU8(&kind)) {
+      return d.fail("expected canonopt");
+    }
+
+    switch (kind) {
+      // TODO: Actually parse canonopts
+      default:
+        return d.failf("unexpected canonopt kind 0x%02x", kind);
+    }
+  }
+
+  return true;
+}
+
+bool wasm::DecodeComponentCanonDef(Decoder& d, MutableComponent& c) {
+  uint8_t kind;
+  if (!d.readFixedU8(&kind)) {
+    return d.fail("expected canonical definition");
+  }
+
+  switch (kind) {
+    case 0x00: {  // canon lift <core:funcidx> <opts> <typeidx>
+      uint8_t dummy;
+      if (!d.readFixedU8(&dummy) || dummy != 0) {
+        return d.fail("expected canonical definition");
+      }
+
+      uint32_t coreFuncIdx;
+      if (!d.readVarU32(&coreFuncIdx)) {
+        return d.fail("expected core function index");
+      }
+      if (c->coreFuncs.length() <= coreFuncIdx) {
+        return d.failf("invalid core function index %d", coreFuncIdx);
+      }
+
+      ComponentCanonOptVector opts;
+      if (!DecodeCanonOpts(d, &opts)) {
+        return false;
+      }
+
+      uint32_t typeIdx;
+      if (!d.readVarU32(&typeIdx)) {
+        return d.fail("expected type index");
+      }
+      // TODO: Validation of lifting function types!!!!
+
+      // TODO: Construct something useful here.
+      if (!c->funcs.emplaceBack()) {
+        return false;
+      }
+    } break;
+    case 0x01: {  // canon lower <funcidx> <opts>
+      return d.fail("TODO: canon lower is not supported yet");
+    } break;
+    default:
+      return d.failf("unexpected canonical definition kind 0x%02x", kind);
   }
 
   return true;

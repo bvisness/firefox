@@ -1123,6 +1123,21 @@ static SharedComponent CompileComponent(
             }
           }
         } break;
+        case 8: {  // vec(canon)
+          uint32_t numCanonDefs;
+          if (!d.readVarU32(&numCanonDefs)) {
+            d.fail("expected number of canonical definitions");
+            return nullptr;
+          }
+
+          // TODO: Implementation limit on number of canonical definitions?
+
+          for (uint32_t i = 0; i < numCanonDefs; i++) {
+            if (!DecodeComponentCanonDef(d, c)) {
+              return nullptr;
+            }
+          }
+        } break;
         case 11: {  // vec(export)
           uint32_t numExports;
           if (!d.readVarU32(&numExports)) {
