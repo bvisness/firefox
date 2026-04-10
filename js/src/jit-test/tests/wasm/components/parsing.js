@@ -231,10 +231,25 @@ new WebAssembly.Component(wasmTextToBinary(`
 )
 `));
 
-throw "TODO: Not implemented beyond this point";
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (func (param "a" s32) (param "b" s32) (result s32)))
+
+  (core module
+    (func (export "add_impl") (param i32 i32) (result i32)
+      (i32.add (local.get 0) (local.get 1))
+    )
+  )
+  (core instance (instantiate 0))
+
+  (alias core export 0 "add_impl" (core func))
+  (func (type 0) (canon lift (core func 0)))
+  (export "add" (func 1))
+)
+`)), WebAssembly.CompileError, /invalid function index 1 for export/);
 
 new WebAssembly.Component(wasmTextToBinary(`
-  (component
+(component
   (type (func (param "a" s32) (param "b" s32) (result s32)))
 
   (core module

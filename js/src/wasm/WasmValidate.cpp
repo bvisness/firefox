@@ -5276,19 +5276,21 @@ bool wasm::DecodeComponentExport(Decoder& d, MutableComponent& c) {
   uint32_t numItems = 0;
   switch (exportType) {
     case ComponentSort::Func: {
-      return d.fail("TODO: exported funcs are not supported yet");
+      kindStr = "function";
+      numItems = c->funcs.length();
     } break;
     case ComponentSort::Value: {
       return d.fail("TODO: exported values are not supported yet");
     } break;
     case ComponentSort::Type: {
-      return d.fail("TODO: exported types are not supported yet");
+      kindStr = "type";
+      numItems = c->types.length();
     } break;
     case ComponentSort::Component: {
       return d.fail("TODO: exported components are not supported yet");
     } break;
     case ComponentSort::Instance: {
-      return d.fail("TODO: exported core instances are not supported yet");
+      return d.fail("TODO: exported component instances are not supported yet");
     } break;
     case ComponentSort::CoreModule: {
       kindStr = "core module";
@@ -5298,7 +5300,7 @@ bool wasm::DecodeComponentExport(Decoder& d, MutableComponent& c) {
       MOZ_CRASH("all cases from DecodeComponentSort should have been handled");
   }
   if (exportIndex >= numItems) {
-    return d.failf("invalid %s index %d", kindStr, exportIndex);
+    return d.failf("invalid %s index %d for export", kindStr, exportIndex);
   }
 
   uint8_t hasExplicitExternDesc;
