@@ -102,6 +102,10 @@ struct CacheableName {
   WASM_DECLARE_FRIEND_SERIALIZE(CacheableName);
 };
 
+// A helper macro allowing CacheableNames to be printed with `%.*s`.
+#define CacheableName_Printf(n) \
+  (int)(n).utf8Bytes().Length(), (n).utf8Bytes().data()
+
 using CacheableNameVector = Vector<CacheableName, 0, SystemAllocPolicy>;
 
 // A hash policy for names.

@@ -29,7 +29,45 @@
 namespace js {
 namespace wasm {
 
-enum class ComponentTypeKind {
+// A "sort", or "kind", of item in the component model, used for all cases where
+// we must refer to a different item.
+//
+// This type is also used for the `externdesc` type, which describes what
+// components (not core modules) can import and export, and whose cases are a
+// subset of `sort`. Sorts that are invalid for `externdesc` have the highest
+// bit set. Additionally, sorts that can be exported by core modules (core:sort)
+// have the second-highest bit set.
+enum class ComponentSort : uint8_t {
+  Func = 0x01,
+  Value = 0x02,
+  Type = 0x03,
+  Component = 0x04,
+  Instance = 0x05,
+
+  CoreFunction = 0xc0 | int(DefinitionKind::Function),
+  CoreTable = 0xc0 | int(DefinitionKind::Table),
+  CoreMemory = 0xc0 | int(DefinitionKind::Memory),
+  CoreGlobal = 0xc0 | int(DefinitionKind::Global),
+  CoreTag = 0xc0 | int(DefinitionKind::Tag),
+
+  CoreType = 0x80 | 0x10,
+  CoreModule = 0x11,
+  CoreInstance = 0x80 | 0x12,
+};
+
+static inline bool ComponentSortValidForExternDesc(ComponentSort sort) {
+  return (uint8_t(sort) & 0x80) == 0;
+}
+
+static inline bool ComponentSortIsCoreSort(ComponentSort sort) {
+  return (uint8_t(sort) & 0x40) != 0;
+}
+
+static inline DefinitionKind CoreSortFromComponentSort(ComponentSort sort) {
+  return DefinitionKind(uint8_t(sort) & ~0xc0);
+}
+
+enum class ComponentTypeKind : uint8_t {
   Bool = 0x7f,
   S8 = 0x7e,
   U8 = 0x7d,
@@ -171,7 +209,104 @@ class ComponentDefType {
   ComponentTypeKind kind() const { return kind_; }
 };
 
-struct CoreInstanceDesc {};
+class ComponentAlias {
+  // For export aliases, the index of the component instance or core instance.
+  // For outer aliases, the number of enclosing components to jump out to.
+  uint32_t instanceIdx_;
+
+  // The index of the aliased item in its component instance or core instance.
+  uint32_t innerIdx_;
+
+  // Whether the alias is to be interpreted as an outer alias.
+  bool isOuter_;
+
+  // Whether `instanceIdx` refers to a core instance or component instance.
+  bool isCoreInstance_;
+
+  // The sort of item being aliased.
+  ComponentSort sort_;
+
+  explicit ComponentAlias(uint32_t instanceIdx, uint32_t innerIdx,
+                          ComponentSort sort, bool isOuter, bool isCoreInstance)
+      : instanceIdx_(instanceIdx),
+        innerIdx_(innerIdx),
+        isOuter_(isOuter),
+        isCoreInstance_(isCoreInstance),
+        sort_(sort) {}
+
+ public:
+  static ComponentAlias fromExport(uint32_t instanceIdx, uint32_t innerIdx,
+                                   ComponentSort sort) {
+    MOZ_ASSERT(!ComponentSortIsCoreSort(sort));
+    return ComponentAlias(instanceIdx, innerIdx, sort, /*isOuter=*/false,
+                          /*isCoreInstance=*/false);
+  }
+  static ComponentAlias fromCoreExport(uint32_t instanceIdx, uint32_t innerIdx,
+                                       ComponentSort sort) {
+    MOZ_ASSERT(ComponentSortIsCoreSort(sort));
+    return ComponentAlias(instanceIdx, innerIdx, sort, /*isOuter=*/false,
+                          /*isCoreInstance=*/true);
+  }
+  static ComponentAlias outer(uint32_t count, uint32_t index,
+                              ComponentSort sort) {
+    MOZ_ASSERT(!ComponentSortIsCoreSort(sort));
+    return ComponentAlias(count, index, sort, /*isOuter=*/true,
+                          /*isCoreInstance=*/false);
+  }
+
+  bool isExport() const { return !isOuter_ && !isCoreInstance_; }
+  bool isCoreExport() const { return !isOuter_ && isCoreInstance_; }
+  bool isOuter() const {
+    MOZ_ASSERT(!isCoreInstance_);
+    return isOuter_;
+  }
+
+  ComponentSort sort() const { return sort_; }
+  uint32_t instanceIdx() const { return instanceIdx_; }
+  uint32_t itemIndex() const { return innerIdx_; }
+};
+
+struct CoreInstanceInstantiateArg {
+  CacheableName name;
+  uint32_t instanceIdx;
+};
+
+using CoreInstanceInstantiateArgVector =
+    mozilla::Vector<CoreInstanceInstantiateArg, 0, SystemAllocPolicy>;
+
+// Instructions for instantiating a core instance from a core module,
+// corresponding to this text production:
+//
+//     (core instance (instantiate <modidx>) (with ...)*)`
+//
+struct CoreInstanceDescFromModule {
+  // The core module to instantiate.
+  uint32_t moduleIndex;
+
+  // The instance's "with" declarations. In the binary format there is no inline
+  // export form, only a form that uses the exports of another core instance.
+  CoreInstanceInstantiateArgVector args;
+};
+
+// Instructions for instantiating a core instance by re-exporting core items
+// already present in the component's index spaces. Corresponds to this text:
+//
+//     (core instance (export ...)*)
+//
+// This form of core instantiation semantically creates a new anonymous module
+// which imports the given definitions and re-exports them. Alternatively, you
+// can consider it a mere renaming of the items exported by other modules, but
+// creating an anonymous module simplifies our implementation. Note that the
+// module does not live in the component's core module index space.
+//
+// TODO: Fill this out and figure out how to satisfy the module's imports.
+struct CoreInstanceDescFromInlineExports {
+  SharedModule mod;
+};
+
+// Instructions for instantiating a core instance.
+using CoreInstanceDesc = mozilla::Variant<CoreInstanceDescFromModule,
+                                          CoreInstanceDescFromInlineExports>;
 
 class ComponentExternDesc {
   ComponentSort sort_;
@@ -196,6 +331,8 @@ class ComponentExternDesc {
     desc.typeIndex_ = typeIdx;
     return desc;
   }
+
+  ComponentSort sort() const { return sort_; }
 };
 
 class ComponentExport {
@@ -220,20 +357,39 @@ class ComponentExport {
   ComponentExternDesc implicitExternDesc(Component& c);
 };
 
-using ComponentExportVector = Vector<ComponentExport, 0, SystemAllocPolicy>;
-
 class Component : public JS::WasmComponent {
-  using ModuleVector = mozilla::Vector<SharedModule, 0, SystemAllocPolicy>;
+  using CoreModuleVector = mozilla::Vector<SharedModule, 0, SystemAllocPolicy>;
+  using CoreInstanceVector =
+      mozilla::Vector<CoreInstanceDesc, 0, SystemAllocPolicy>;
   using TypeVector = mozilla::Vector<ComponentDefType, 0, SystemAllocPolicy>;
+  using ExportVector = Vector<ComponentExport, 0, SystemAllocPolicy>;
+  using AliasVector = Vector<ComponentAlias, 0, SystemAllocPolicy>;
 
   // JS API and JS::WasmComponent implementation:
   JSObject* createObject(JSContext* cx) const override;
   JSObject* createObjectForAsmJS(JSContext* cx) const override;
 
  public:
-  ModuleVector modules;
+  CoreModuleVector coreModules;
+  CoreInstanceVector coreInstances;
   TypeVector types;
-  ComponentExportVector exports;
+  ExportVector exports;
+
+  AliasVector coreFuncs;  // TODO: This will have to accommodate lowered funcs
+  AliasVector coreTables;
+  AliasVector coreMemories;
+  AliasVector coreGlobals;
+  AliasVector coreTags;
+
+  SharedModule moduleForCoreInstance(uint32_t instanceIdx) {
+    CoreInstanceDesc& instance = coreInstances[instanceIdx];
+
+    return instance.match(
+        [&coreModules = this->coreModules](CoreInstanceDescFromModule& desc) {
+          return coreModules[desc.moduleIndex];
+        },
+        [](CoreInstanceDescFromInlineExports& desc) { return desc.mod; });
+  }
 };
 
 using MutableComponent = RefPtr<Component>;

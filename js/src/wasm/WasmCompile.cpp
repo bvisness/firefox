@@ -1074,7 +1074,7 @@ static SharedComponent CompileComponent(
           if (!module) {
             return nullptr;
           }
-          if (!c->modules.append(module)) {
+          if (!c->coreModules.append(module)) {
             return nullptr;
           }
         } break;
@@ -1089,6 +1089,21 @@ static SharedComponent CompileComponent(
 
           for (uint32_t i = 0; i < numInstances; i++) {
             if (!DecodeCoreInstance(d, c)) {
+              return nullptr;
+            }
+          }
+        } break;
+        case 6: {  // vec(alias)
+          uint32_t numAliases;
+          if (!d.readVarU32(&numAliases)) {
+            d.fail("expected number of aliases");
+            return nullptr;
+          }
+
+          // TODO: Implementation limit on number of aliases...?
+
+          for (uint32_t i = 0; i < numAliases; i++) {
+            if (!DecodeComponentAlias(d, c)) {
               return nullptr;
             }
           }

@@ -4739,7 +4739,7 @@ bool wasm::DecodeCoreInstance(Decoder& d, MutableComponent& c) {
       if (!d.readVarU32(&moduleIndex)) {
         return d.fail("expected core module index");
       }
-      if (moduleIndex >= c->modules.length()) {
+      if (moduleIndex >= c->coreModules.length()) {
         return d.failf("invalid core module index %d", moduleIndex);
       }
 
@@ -4748,6 +4748,12 @@ bool wasm::DecodeCoreInstance(Decoder& d, MutableComponent& c) {
         return d.fail("expected number of instantiate arguments");
       }
       // TODO: Implementation limit for instantiate args?
+
+      CoreInstanceInstantiateArgVector args;
+      if (!args.reserve(numArgs)) {
+        return false;
+      }
+
       for (uint32_t i = 0; i < numArgs; i++) {
         CacheableName importName;
         if (!DecodeName(d, &importName)) {
@@ -4770,10 +4776,29 @@ bool wasm::DecodeCoreInstance(Decoder& d, MutableComponent& c) {
         // TODO: Validate that the instance's exports satisfy the module's
         // imports
 
-        // TODO: Store this on the component
+        args.infallibleAppend((CoreInstanceInstantiateArg){
+            .name = std::move(importName),
+            .instanceIdx = instanceIndex,
+        });
+      }
+
+      CoreInstanceDesc desc((CoreInstanceDescFromModule){
+          .moduleIndex = moduleIndex,
+          .args = std::move(args),
+      });
+      if (!c->coreInstances.append(std::move(desc))) {
+        return false;
       }
     } break;
     case 0x01: {  // inline exports
+      // TODO: Core instances generated from inline exports are basically just a
+      // way of renaming exports to satisfy another component's imports. But
+      // even so, a reasonable first way to implement this would be to literally
+      // construct a new module with imports and exports, then instantiate that.
+      // (Note that this new module wouldn't take up space in the core module
+      // index space; we would have to track ownership a different way.)
+      return d.fail(
+          "TODO: core instances from inline exports are not yet supported");
     } break;
     default:
       return d.failf("expected type of instance expression but got %d",
@@ -4809,6 +4834,9 @@ bool wasm::DecodeCoreInstance(Decoder& d, MutableComponent& c) {
         } break;
         case 0x03: {
           *sort = ComponentSort::CoreGlobal;
+        } break;
+        case 0x04: {
+          *sort = ComponentSort::CoreTag;
         } break;
         case 0x10: {
           *sort = ComponentSort::CoreType;
@@ -4849,7 +4877,8 @@ bool wasm::DecodeCoreInstance(Decoder& d, MutableComponent& c) {
   return true;
 }
 
-bool DecodeComponentExternDesc(Decoder& d, ComponentExternDesc* desc) {
+[[nodiscard]] static bool DecodeComponentExternDesc(Decoder& d,
+                                                    ComponentExternDesc* desc) {
   ComponentSort kind;
   if (!DecodeComponentSort(d, &kind, /*forExterndesc=*/true)) {
     return false;
@@ -5012,7 +5041,7 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
         }
         ft.resultType = resultType;
       } else if (hasntResultType == 1) {
-        // hasn't indeed. Consume an extra zero for some reason.
+        // Hasn't indeed. Consume an extra zero for some reason.
         uint8_t dummy;
         if (!d.readFixedU8(&dummy) || dummy != 0) {
           return d.fail("expected result type");
@@ -5029,6 +5058,112 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
 
     default:
       return d.failf("unexpected type 0x%02x", kind);
+  }
+
+  return true;
+}
+
+bool wasm::DecodeComponentAlias(Decoder& d, MutableComponent& c) {
+  ComponentSort sort;
+  if (!DecodeComponentSort(d, &sort, /*forExterndesc=*/false)) {
+    return false;
+  }
+
+  uint8_t targetType;
+  if (!d.readFixedU8(&targetType)) {
+    return d.fail("expected alias target");
+  }
+
+  switch (targetType) {
+    case 0x00: {  // export i:<instanceidx> n:<name>
+      return d.fail("TODO: component export aliases are not yet supported");
+    } break;
+    case 0x01: {  // core export i:<core:instanceidx> n:<core:name>
+      uint32_t instanceIdx;
+      if (!d.readVarU32(&instanceIdx)) {
+        return d.fail("expected instance index");
+      }
+
+      CacheableName exportName;
+      if (!DecodeName(d, &exportName)) {
+        return d.fail("expected instance export name");
+      }
+
+      if (c->coreInstances.length() <= instanceIdx) {
+        return d.failf("invalid core instance index %d", instanceIdx);
+      }
+      SharedModule mod = c->moduleForCoreInstance(instanceIdx);
+      mozilla::Maybe<const Export&> exp =
+          mod->moduleMeta().getExport(exportName);
+      if (exp.isNothing()) {
+        return d.failf("core instance %d has no export \"%.*s\"", instanceIdx,
+                       CacheableName_Printf(exportName));
+      }
+
+      switch (sort) {
+        case ComponentSort::CoreFunction: {
+          if (exp->kind() != DefinitionKind::Function) {
+            return d.failf(
+                "export \"%.*s\" of core instance %d is not a function",
+                CacheableName_Printf(exportName), instanceIdx);
+          }
+          if (!c->coreFuncs.append(ComponentAlias::fromCoreExport(
+                  instanceIdx, exp->funcIndex(), sort))) {
+            return false;
+          }
+        } break;
+        case ComponentSort::CoreTable: {
+          if (exp->kind() != DefinitionKind::Table) {
+            return d.failf("export \"%.*s\" of core instance %d is not a table",
+                           CacheableName_Printf(exportName), instanceIdx);
+          }
+          if (!c->coreTables.append(ComponentAlias::fromCoreExport(
+                  instanceIdx, exp->tableIndex(), sort))) {
+            return false;
+          }
+        } break;
+        case ComponentSort::CoreMemory: {
+          if (exp->kind() != DefinitionKind::Memory) {
+            return d.failf(
+                "export \"%.*s\" of core instance %d is not a memory",
+                CacheableName_Printf(exportName), instanceIdx);
+          }
+          if (!c->coreMemories.append(ComponentAlias::fromCoreExport(
+                  instanceIdx, exp->memoryIndex(), sort))) {
+            return false;
+          }
+        } break;
+        case ComponentSort::CoreGlobal: {
+          if (exp->kind() != DefinitionKind::Global) {
+            return d.failf(
+                "export \"%.*s\" of core instance %d is not a global",
+                CacheableName_Printf(exportName), instanceIdx);
+          }
+          if (!c->coreGlobals.append(ComponentAlias::fromCoreExport(
+                  instanceIdx, exp->globalIndex(), sort))) {
+            return false;
+          }
+        } break;
+        case ComponentSort::CoreTag: {
+          if (exp->kind() != DefinitionKind::Tag) {
+            return d.failf("export \"%.*s\" of core instance %d is not a tag",
+                           CacheableName_Printf(exportName), instanceIdx);
+          }
+          if (!c->coreTags.append(ComponentAlias::fromCoreExport(
+                  instanceIdx, exp->tagIndex(), sort))) {
+            return false;
+          }
+        } break;
+        default:
+          return d.failf("invalid alias sort 0x%02x", sort);
+      }
+
+    } break;
+    case 0x02: {  // outer ct:<u32> idx:<u32>
+      return d.fail("TODO: outer aliases are not yet supported");
+    } break;
+    default:
+      return d.failf("unexpected alias target 0x%02x", targetType);
   }
 
   return true;
@@ -5089,7 +5224,7 @@ bool wasm::DecodeComponentExport(Decoder& d, MutableComponent& c) {
     } break;
     case ComponentSort::CoreModule: {
       kindStr = "core module";
-      numItems = c->modules.length();
+      numItems = c->coreModules.length();
     } break;
     default:
       MOZ_CRASH("all cases from DecodeComponentSort should have been handled");

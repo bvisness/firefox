@@ -124,6 +124,96 @@ new WebAssembly.Component(wasmTextToBinary(`
 )
 `));
 
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (core module
+    (func (export "add_impl") (param i32 i32) (result i32)
+      (i32.add (local.get 0) (local.get 1))
+    )
+  )
+  (core instance (instantiate 0))
+
+  (alias core export 1 "add_impl" (core func))
+)
+`)), WebAssembly.CompileError, /invalid core instance index/);
+
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (core module
+    (func (export "add_impl") (param i32 i32) (result i32)
+      (i32.add (local.get 0) (local.get 1))
+    )
+  )
+  (core instance (instantiate 0))
+
+  (alias core export 0 "pizza" (core func))
+)
+`)), WebAssembly.CompileError, /core instance 0 has no export "pizza"/);
+
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (core module (global (export "add_impl") i32 (i32.const 0)))
+  (core instance (instantiate 0))
+
+  (alias core export 0 "add_impl" (core func))
+)
+`)), WebAssembly.CompileError, /export "add_impl" of core instance 0 is not a function/);
+
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (core module (global (export "add_impl") i32 (i32.const 0)))
+  (core instance (instantiate 0))
+
+  (alias core export 0 "add_impl" (core table))
+)
+`)), WebAssembly.CompileError, /export "add_impl" of core instance 0 is not a table/);
+
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (core module (global (export "add_impl") i32 (i32.const 0)))
+  (core instance (instantiate 0))
+
+  (alias core export 0 "add_impl" (core memory))
+)
+`)), WebAssembly.CompileError, /export "add_impl" of core instance 0 is not a memory/);
+
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (core module (tag (export "add_impl")))
+  (core instance (instantiate 0))
+
+  (alias core export 0 "add_impl" (core global))
+)
+`)), WebAssembly.CompileError, /export "add_impl" of core instance 0 is not a global/);
+
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (core module (global (export "add_impl") i32 (i32.const 0)))
+  (core instance (instantiate 0))
+
+  (alias core export 0 "add_impl" (core tag))
+)
+`)), WebAssembly.CompileError, /export "add_impl" of core instance 0 is not a tag/);
+
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (core module
+    (func (export "func"))
+    (table (export "table") 0 0 funcref)
+    (memory (export "memory") 0 0)
+    (global (export "global") i32 (i32.const 0))
+    (tag (export "tag"))
+  )
+  (core instance (instantiate 0))
+
+  (alias core export 0 "func" (core func))
+  (alias core export 0 "table" (core table))
+  (alias core export 0 "memory" (core memory))
+  (alias core export 0 "global" (core global))
+  (alias core export 0 "tag" (core tag))
+)
+`));
+
 throw "TODO: Not implemented beyond this point";
 
 new WebAssembly.Component(wasmTextToBinary(`
@@ -147,6 +237,23 @@ new WebAssembly.Component(wasmTextToBinary(`
 
   (export "add" (func 0))
   (export "sub" (func 1))
+)
+`));
+
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (func (param "a" s32) (param "b" s32) (result s32)))
+
+  (core module
+    (func (export "add_impl") (param i32 i32) (result i32)
+      (i32.add (local.get 0) (local.get 1))
+    )
+  )
+  (core instance (instantiate 0))
+
+  (alias core export 0 "add_impl" (core func))
+  (func (type 0) (canon lift (core func 0)))
+  (core func (canon lower (func 0)))
 )
 `));
 
