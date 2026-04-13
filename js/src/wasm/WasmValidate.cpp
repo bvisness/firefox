@@ -4932,8 +4932,7 @@ static mozilla::Maybe<ComponentValType> DecodeComponentValType(
       d.failf("invalid type index %d", type);
       return mozilla::Nothing();
     }
-    ComponentDefType& foo = c->types[type];
-    if (!ComponentTypeKindIsValueType(foo.kind())) {
+    if (!ComponentTypeKindIsValueType(c->types[type].kind())) {
       d.failf("type %d is not a value type", type);
       return mozilla::Nothing();
     }
