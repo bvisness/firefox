@@ -1899,7 +1899,9 @@ bool WasmComponentObject::construct(JSContext* cx, unsigned argc, Value* vp) {
 
   BytecodeSource source;
   Rooted<JSObject*> sourceObj(cx, &callArgs[0].toObject());
-  if (!GetBytecodeSource(cx, sourceObj, JSMSG_WASM_BAD_BUF_ARG, &source)) {
+  bool isShared;
+  if (!GetBytecodeSource(cx, sourceObj, JSMSG_WASM_BAD_BUF_ARG, &source,
+                         &isShared)) {
     return false;
   }
 
