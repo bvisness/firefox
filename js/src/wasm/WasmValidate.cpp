@@ -5325,6 +5325,7 @@ bool wasm::DecodeComponentExport(Decoder& d, MutableComponent& c) {
   if (hasExplicitExternDesc) {
     ComponentExternDesc explicitExternDesc;
     if (!DecodeComponentExternDesc(d, &explicitExternDesc)) {
+      return false;
     }
   }
 
