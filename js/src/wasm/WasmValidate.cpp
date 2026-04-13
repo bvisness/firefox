@@ -4911,7 +4911,6 @@ bool wasm::DecodeCoreInstance(Decoder& d, MutableComponent& c) {
       MOZ_CRASH();
   }
 
-  *desc = ComponentExternDesc::func(0);
   return true;
 }
 
@@ -5327,6 +5326,8 @@ bool wasm::DecodeComponentExport(Decoder& d, MutableComponent& c) {
     if (!DecodeComponentExternDesc(d, &explicitExternDesc)) {
       return false;
     }
+
+    // TODO: Validate that the exported thing matches the explicit externdesc
   }
 
   // TODO: Validate that all resource types used (transitively!) in the exported
