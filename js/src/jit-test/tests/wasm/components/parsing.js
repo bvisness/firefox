@@ -277,6 +277,17 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 // TODO: Test any introspection properties of the above component
 
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (record (field "x" u32)))
+
+  (core module (func (export "f") (param i32) (result i32) (local.get 0)))
+  (core instance (instantiate 0))
+  (alias core export 0 "f" (core func))
+  (func (type 0) (canon lift (core func 0)))
+)
+`)), WebAssembly.CompileError, /canon lift requires a func type/);
+
 // Test function type matching on canon lift
 {
   const sigs = [

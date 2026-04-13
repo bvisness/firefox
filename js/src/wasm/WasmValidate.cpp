@@ -5221,6 +5221,9 @@ bool wasm::DecodeComponentCanonDef(Decoder& d, MutableComponent& c) {
       if (c->types.length() <= typeIdx) {
         return d.failf("invalid type index %d", typeIdx);
       }
+      if (c->types[typeIdx].kind() != ComponentTypeKind::Func) {
+        return d.fail("canon lift requires a func type");
+      }
 
       const ComponentFuncType& ft = c->types[typeIdx].asFunc();
       mozilla::Maybe<FuncType> maybeFlattened = FlattenFuncType(*c, ft);
