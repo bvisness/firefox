@@ -41,6 +41,151 @@ ComponentExternDesc ComponentExport::implicitExternDesc(Component& c) {
   MOZ_CRASH("TODO");
 }
 
+mozilla::Maybe<FuncType> wasm::FlattenFuncType(const Component& c,
+                                               const ComponentFuncType& ft) {
+  ValTypeVector params;
+  ValTypeVector results;
+
+  if (!FlattenTypes(c, ft.paramTypes, &params)) {
+    return mozilla::Nothing();
+  }
+  if (ft.resultType.isSome()) {
+    if (!FlattenType(c, ft.resultType.ref(), &results)) {
+      return mozilla::Nothing();
+    }
+  }
+
+  return mozilla::Some(FuncType(std::move(params), std::move(results)));
+}
+
+bool wasm::FlattenTypes(const Component& c, const ComponentValTypeVector& ts,
+                        ValTypeVector* result) {
+  // Pre-reserve at least enough space for a bunch of primitives. We still may
+  // exceed the capacity reserved here but at least we can avoid a little bit of
+  // allocation. (Appends after this point are not to be considered infallible.)
+  if (!result->reserve(ts.length())) {
+    return false;
+  }
+
+  for (const ComponentValType& t : ts) {
+    if (!FlattenType(c, t, result)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool wasm::FlattenType(const Component& c, const ComponentValType& t,
+                       ValTypeVector* result) {
+  ComponentTypeKind kind;
+  if (t.isTypeIndex()) {
+    kind = c.types[t.asTypeIndex()].kind();
+  } else if (t.isPrimitive()) {
+    kind = t.asPrimitive();
+  } else {
+    MOZ_CRASH();
+  }
+
+  switch (kind) {
+    // Simple primitives
+    case ComponentTypeKind::Bool:
+    case ComponentTypeKind::U8:
+    case ComponentTypeKind::U16:
+    case ComponentTypeKind::U32:
+    case ComponentTypeKind::S8:
+    case ComponentTypeKind::S16:
+    case ComponentTypeKind::S32:
+    case ComponentTypeKind::Char:
+    case ComponentTypeKind::Flags:
+    case ComponentTypeKind::Own:
+    case ComponentTypeKind::Borrow: {
+      if (!result->append(ValType::i32())) {
+        return false;
+      }
+    } break;
+    case ComponentTypeKind::U64:
+    case ComponentTypeKind::S64: {
+      if (!result->append(ValType::i64())) {
+        return false;
+      }
+    } break;
+    case ComponentTypeKind::F32: {
+      if (!result->append(ValType::f32())) {
+        return false;
+      }
+    } break;
+    case ComponentTypeKind::F64: {
+      if (!result->append(ValType::f64())) {
+        return false;
+      }
+    } break;
+
+    // Strings are always two i32's
+    case ComponentTypeKind::String: {
+      if (!result->append(ValType::i32())) {
+        return false;
+      }
+      if (!result->append(ValType::i32())) {
+        return false;
+      }
+    } break;
+
+    // Compound types have dedicated logic. Note that our data storage for some
+    // types disagrees with the categories in the canonical ABI explainer, e.g.
+    // we represent tuples as a vector of value types, not a record.
+    case ComponentTypeKind::List: {
+      // This will have to change when support is added for fixed-length lists.
+      if (!result->append(ValType::i32())) {
+        return false;
+      }
+      if (!result->append(ValType::i32())) {
+        return false;
+      }
+    } break;
+    case ComponentTypeKind::Record: {
+      const ComponentRecordFieldVector& fields =
+          c.types[t.asTypeIndex()].asRecord();
+      if (!FlattenRecord(c, fields, result)) {
+        return false;
+      }
+    } break;
+    case ComponentTypeKind::Tuple: {
+      const ComponentValTypeVector& types = c.types[t.asTypeIndex()].asTuple();
+      if (!FlattenTypes(c, types, result)) {
+        return false;
+      }
+    } break;
+    case ComponentTypeKind::Variant:
+    case ComponentTypeKind::Enum:
+    case ComponentTypeKind::Option:
+    case ComponentTypeKind::Result: {
+      MOZ_CRASH("TODO");
+    } break;
+
+    case ComponentTypeKind::Component:
+    case ComponentTypeKind::Func:
+    case ComponentTypeKind::Instance:
+    case ComponentTypeKind::Resource: {
+      MOZ_CRASH("should have been rejected when the func type was validated");
+    } break;
+  }
+
+  return true;
+}
+
+bool wasm::FlattenRecord(const Component& c,
+                         const ComponentRecordFieldVector& fields,
+                         ValTypeVector* result) {
+  for (const ComponentRecordField& field : fields) {
+    if (!FlattenType(c, field.type, result)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 /* virtual */
 JSObject* Component::createObject(JSContext* cx) const {
   if (!GlobalObject::ensureConstructor(cx, cx->global(), JSProto_WebAssembly)) {

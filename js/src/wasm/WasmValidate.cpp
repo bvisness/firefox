@@ -5220,7 +5220,22 @@ bool wasm::DecodeComponentCanonDef(Decoder& d, MutableComponent& c) {
       if (!d.readVarU32(&typeIdx)) {
         return d.fail("expected type index");
       }
-      // TODO: Validation of lifting function types!!!!
+      if (c->types.length() <= typeIdx) {
+        return d.failf("invalid type index %d", typeIdx);
+      }
+
+      const ComponentFuncType& ft = c->types[typeIdx].asFunc();
+      mozilla::Maybe<FuncType> maybeFlattened = FlattenFuncType(*c, ft);
+      if (maybeFlattened.isNothing()) {
+        return false;
+      }
+      const FuncType& flattened = maybeFlattened.ref();
+
+      if (!FuncType::strictlyEquals(flattened,
+                                    c->typeForCoreFunc(coreFuncIdx))) {
+        return d.fail(
+            "could not lift core func (component func type did not match)");
+      }
 
       // TODO: Construct something useful here.
       if (!c->funcs.emplaceBack()) {

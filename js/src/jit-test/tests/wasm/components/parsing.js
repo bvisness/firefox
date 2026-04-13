@@ -276,3 +276,42 @@ new WebAssembly.Component(wasmTextToBinary(`
 )
 `));
 // TODO: Test any introspection properties of the above component
+
+// Test function type matching on canon lift
+{
+  const sigs = [
+    [true, `(func (param "a" s32) (param "b" s32) (result s32))`],
+    [true, `(func (param "a" u32) (param "b" u32) (result u32))`],
+    [true, `(func (param "a" u32) (param "b" s32) (result s32))`],
+    [true, `(func (param "a" u32) (param "b" u32) (result bool))`],
+    [true, `(func (param "a" string) (result bool))`],
+
+    [false, `(func (param "a" s32) (result s32))`],
+    [false, `(func (param "a" s32) (param "b" s32))`],
+    [false, `(func (param "a" u64) (param "b" u64) (result u64))`],
+    [false, `(func (param "a" string) (param "b" string) (result s32))`],
+  ];
+  for (const [valid, sig] of sigs) {
+    print(`Testing ${valid ? "good" : "bad"} signature ${sig}`);
+
+    function expectGood(f) { f(); }
+    function expectBad(f) {
+      assertErrorMessage(f, WebAssembly.CompileError, /could not lift core func/);
+    }
+
+    (valid ? expectGood : expectBad)(() => new WebAssembly.Component(wasmTextToBinary(`
+      (component
+        (type ${sig})
+
+        (core module
+          (func (export "add_impl") (param i32 i32) (result i32)
+            (i32.add (local.get 0) (local.get 1))
+          )
+        )
+        (core instance (instantiate 0))
+        (alias core export 0 "add_impl" (core func))
+        (func (type 0) (canon lift (core func 0)))
+      )
+    `)));
+  }
+}

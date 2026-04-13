@@ -207,7 +207,32 @@ class ComponentDefType {
   }
 
   ComponentTypeKind kind() const { return kind_; }
+
+  const ComponentRecordFieldVector& asRecord() const {
+    MOZ_RELEASE_ASSERT(kind() == ComponentTypeKind::Record);
+    return props_.as<ComponentRecordFieldVector>();
+  }
+  const ComponentValTypeVector& asTuple() const {
+    MOZ_RELEASE_ASSERT(kind() == ComponentTypeKind::Tuple);
+    return props_.as<ComponentValTypeVector>();
+  }
+  const ComponentFuncType& asFunc() const {
+    MOZ_RELEASE_ASSERT(kind() == ComponentTypeKind::Func);
+    return props_.as<ComponentFuncType>();
+  }
 };
+
+[[nodiscard]] bool FlattenTypes(const Component& c,
+                                const ComponentValTypeVector& ts,
+                                ValTypeVector* result);
+[[nodiscard]] bool FlattenType(const Component& c, const ComponentValType& t,
+                               ValTypeVector* result);
+[[nodiscard]] bool FlattenRecord(const Component& c,
+                                 const ComponentRecordFieldVector& fields,
+                                 ValTypeVector* result);
+
+mozilla::Maybe<FuncType> FlattenFuncType(const Component& c,
+                                         const ComponentFuncType& ft);
 
 class ComponentAlias {
   // For export aliases, the index of the component instance or core instance.
@@ -397,6 +422,12 @@ class Component : public JS::WasmComponent {
   AliasVector coreMemories;
   AliasVector coreGlobals;
   AliasVector coreTags;
+
+  const FuncType& typeForCoreFunc(uint32_t coreFuncIdx) {
+    const ComponentAlias& alias = coreFuncs[coreFuncIdx];
+    SharedModule mod = moduleForCoreInstance(alias.instanceIdx());
+    return mod->codeMeta().getFuncType(alias.itemIndex());
+  }
 
   SharedModule moduleForCoreInstance(uint32_t instanceIdx) {
     CoreInstanceDesc& instance = coreInstances[instanceIdx];
