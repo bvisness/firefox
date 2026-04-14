@@ -1,0 +1,332 @@
+// Primitive types - each can be defined standalone.
+{
+  const primitives = [
+    "bool", "s8", "u8", "s16", "u16", "s32", "u32",
+    "s64", "u64", "f32", "f64", "char", "string",
+  ];
+  for (const prim of primitives) {
+    new WebAssembly.Component(wasmTextToBinary(`
+      (component
+        (type ${prim})
+      )
+    `));
+  }
+}
+
+// Record types
+
+// Basic record.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (record (field "x" u32) (field "y" u32)))
+)
+`));
+
+// Empty record - should fail (spec requires at least one field).
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (record))
+)
+`)), WebAssembly.CompileError, /./);
+
+// Record with type reference to a previously-defined type.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type u32)
+  (type (record
+    (field "foo" f64)
+    (field "bar" bool)
+    (field "baz" 0)
+  ))
+)
+`));
+
+// Record with invalid type index.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type u32)
+  (type (record
+    (field "baz" 1)
+  ))
+)
+`)), WebAssembly.CompileError, /invalid type index/);
+
+// Record referencing non-value type (func type).
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (func (param "a" s32) (result s32)))
+  (type (record (field "f" 0)))
+)
+`)), WebAssembly.CompileError, /not a value type/);
+
+// Duplicate field names in a record.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (record (field "x" u32) (field "x" u32)))
+)
+`)), WebAssembly.CompileError, /./);
+
+// Variant types
+
+// Basic variant.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (variant (case "ok" u32) (case "err" string)))
+)
+`));
+
+// Variant with no-payload case.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (variant (case "none") (case "some" u32)))
+)
+`));
+
+// Empty variant - should fail (spec requires at least one case).
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (variant))
+)
+`)), WebAssembly.CompileError, /./);
+
+// Variant with invalid type reference.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (variant (case "bad" 99)))
+)
+`)), WebAssembly.CompileError, /invalid type index/);
+
+// Duplicate case names in a variant.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (variant (case "a" u32) (case "a" u32)))
+)
+`)), WebAssembly.CompileError, /./);
+
+// List types
+
+// Basic list.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (list u32))
+)
+`));
+
+// List of a compound type.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (record (field "x" f64) (field "y" f64)))
+  (type (list 0))
+)
+`));
+
+// Tuple types
+
+// Basic tuple.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (tuple u32 u32 f64))
+)
+`));
+
+// Empty tuple - should fail (spec requires at least one element).
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (tuple))
+)
+`)), WebAssembly.CompileError, /./);
+
+// Tuple with type reference.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (record (field "a" u32) (field "b" u32)))
+  (type (tuple 0 u32 f64))
+)
+`));
+
+// Flags types
+
+// Basic flags.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (flags "read" "write" "execute"))
+)
+`));
+
+// Empty flags - should fail (spec requires 1-32 labels).
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (flags))
+)
+`)), WebAssembly.CompileError, /./);
+
+// Duplicate flag labels.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (flags "read" "read"))
+)
+`)), WebAssembly.CompileError, /./);
+
+// Enum types
+
+// Basic enum.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (enum "red" "green" "blue"))
+)
+`));
+
+// Empty enum - should fail (spec requires at least one label).
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (enum))
+)
+`)), WebAssembly.CompileError, /./);
+
+// Duplicate enum labels.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (enum "red" "red"))
+)
+`)), WebAssembly.CompileError, /./);
+
+// Option types
+
+// Basic option.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (option u32))
+)
+`));
+
+// Option of a compound type.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (record (field "x" u32) (field "y" u32)))
+  (type (option 0))
+)
+`));
+
+// Result types
+
+// Result with ok and error.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (result u32 (error string)))
+)
+`));
+
+// Result with ok only.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (result u32))
+)
+`));
+
+// Result with error only.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (result (error string)))
+)
+`));
+
+// Result with neither.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (result))
+)
+`));
+
+// Own and borrow types (resources not supported per plan)
+
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (resource (rep i32)))
+  (type (own 0))
+)
+`)), WebAssembly.CompileError, /./);
+
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (resource (rep i32)))
+  (type (borrow 0))
+)
+`)), WebAssembly.CompileError, /./);
+
+// Func types
+
+// Basic func type.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (func (param "a" s32) (param "b" s32) (result s32)))
+)
+`));
+
+// Func with no result.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (func (param "a" s32)))
+)
+`));
+
+// Func with no params.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (func (result s32)))
+)
+`));
+
+// Func with no params or result.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (func))
+)
+`));
+
+// Func with compound param types.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (record
+    (field "foo" f64)
+    (field "bar" bool)
+  ))
+  (type (func (param "a" 0) (param "b" 0)))
+)
+`));
+
+// Func with compound result type.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (record (field "x" f64) (field "y" f64)))
+  (type (func (param "a" f64) (param "b" f64) (result 0)))
+)
+`));
+
+// Duplicate param names - should fail (param labels must be strongly-unique).
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (func (param "a" s32) (param "a" s32)))
+)
+`)), WebAssembly.CompileError, /./);
+
+// Edge cases
+
+// Forward type reference - should fail.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (record (field "x" 1)))
+  (type u32)
+)
+`)), WebAssembly.CompileError, /invalid type index/);
+
+// Multiple type definitions referencing each other in order.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type u32)
+  (type (record (field "a" 0) (field "b" f64)))
+  (type (tuple 0 1))
+  (type (list 1))
+  (type (option 2))
+  (type (func (param "x" 1) (param "y" 2) (result 0)))
+)
+`));
