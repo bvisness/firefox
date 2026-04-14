@@ -23,6 +23,7 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // Empty record - should fail (spec requires at least one field).
+// TODO(wasm-cm): Validation not yet implemented; currently accepted.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (record))
@@ -52,6 +53,7 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 `)), WebAssembly.CompileError, /invalid type index/);
 
 // Record referencing non-value type (func type).
+// TODO(wasm-cm): Validation not yet implemented; currently accepted.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (func (param "a" s32) (result s32)))
@@ -59,7 +61,9 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 )
 `)), WebAssembly.CompileError, /not a value type/);
 
-// Duplicate field names in a record.
+// Duplicate field names in a record - should fail (labels must be
+// strongly-unique per spec).
+// TODO(wasm-cm): Validation not yet implemented; currently accepted.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (record (field "x" u32) (field "x" u32)))
@@ -67,6 +71,7 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 `)), WebAssembly.CompileError, /./);
 
 // Variant types
+// TODO(wasm-cm): Variant type parsing (0x71) not yet implemented.
 
 // Basic variant.
 new WebAssembly.Component(wasmTextToBinary(`
@@ -83,6 +88,7 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // Empty variant - should fail (spec requires at least one case).
+// TODO(wasm-cm): Validation not yet implemented.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (variant))
@@ -97,6 +103,7 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 `)), WebAssembly.CompileError, /invalid type index/);
 
 // Duplicate case names in a variant.
+// TODO(wasm-cm): Validation not yet implemented.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (variant (case "a" u32) (case "a" u32)))
@@ -104,6 +111,7 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 `)), WebAssembly.CompileError, /./);
 
 // List types
+// TODO(wasm-cm): List type parsing (0x70) not yet implemented.
 
 // Basic list.
 new WebAssembly.Component(wasmTextToBinary(`
@@ -121,6 +129,7 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // Tuple types
+// TODO(wasm-cm): Tuple type parsing (0x6f) not yet implemented.
 
 // Basic tuple.
 new WebAssembly.Component(wasmTextToBinary(`
@@ -130,6 +139,7 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // Empty tuple - should fail (spec requires at least one element).
+// TODO(wasm-cm): Validation not yet implemented.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (tuple))
@@ -145,6 +155,7 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // Flags types
+// TODO(wasm-cm): Flags type parsing (0x6e) not yet implemented.
 
 // Basic flags.
 new WebAssembly.Component(wasmTextToBinary(`
@@ -154,6 +165,7 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // Empty flags - should fail (spec requires 1-32 labels).
+// TODO(wasm-cm): Validation not yet implemented.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (flags))
@@ -161,6 +173,7 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 `)), WebAssembly.CompileError, /./);
 
 // Duplicate flag labels.
+// TODO(wasm-cm): Validation not yet implemented.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (flags "read" "read"))
@@ -168,6 +181,7 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 `)), WebAssembly.CompileError, /./);
 
 // Enum types
+// TODO(wasm-cm): Enum type parsing (0x6d) not yet implemented.
 
 // Basic enum.
 new WebAssembly.Component(wasmTextToBinary(`
@@ -177,6 +191,7 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // Empty enum - should fail (spec requires at least one label).
+// TODO(wasm-cm): Validation not yet implemented.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (enum))
@@ -184,6 +199,7 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 `)), WebAssembly.CompileError, /./);
 
 // Duplicate enum labels.
+// TODO(wasm-cm): Validation not yet implemented.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (enum "red" "red"))
@@ -191,6 +207,7 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 `)), WebAssembly.CompileError, /./);
 
 // Option types
+// TODO(wasm-cm): Option type parsing (0x6b) not yet implemented.
 
 // Basic option.
 new WebAssembly.Component(wasmTextToBinary(`
@@ -208,6 +225,7 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // Result types
+// TODO(wasm-cm): Result type parsing (0x6a) not yet implemented.
 
 // Result with ok and error.
 new WebAssembly.Component(wasmTextToBinary(`
@@ -238,6 +256,8 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // Own and borrow types (resources not supported per plan)
+// TODO(wasm-cm): Resource type parsing (0x3f) not yet implemented; these
+// fail at the resource definition, not at own/borrow.
 
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
@@ -303,6 +323,7 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // Duplicate param names - should fail (param labels must be strongly-unique).
+// TODO(wasm-cm): Validation not yet implemented; currently accepted.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (func (param "a" s32) (param "a" s32)))

@@ -126,8 +126,8 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 )
 `)), WebAssembly.CompileError, /is not a tag/);
 
-// Component export alias - requires nested components (section ID 4) which
-// aren't supported, so the component section itself is rejected.
+// Component export alias
+// TODO(wasm-cm)
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (component
@@ -138,7 +138,8 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 )
 `)), WebAssembly.CompileError, /unexpected section ID/);
 
-// Outer alias - also requires nested components.
+// Outer alias
+// TODO(wasm-cm)
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type u32)

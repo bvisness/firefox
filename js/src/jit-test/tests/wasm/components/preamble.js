@@ -1,11 +1,3 @@
-// JS API basics (minimal - the JS API is non-standard and invented for testing)
-assertErrorMessage(() => new WebAssembly.Component(), TypeError, /1 argument required/);
-assertErrorMessage(() => new WebAssembly.Component(42), TypeError, /first argument must be an ArrayBuffer/);
-// TODO(wasm-cm): Test calling without `new`, prototype chain, toString tag,
-// instanceof, typeof, etc. once the JS API is more settled.
-
-// Preamble parsing
-
 assertErrorMessage(() => new WebAssembly.Component(new Uint8Array([
   0,
 ])), WebAssembly.CompileError, /failed to match magic number/);
@@ -35,6 +27,9 @@ new WebAssembly.Component(new Uint8Array([
   0x0d, 0, 1, 0,
 ]));
 
+// TODO(wasm-cm): Custom sections (section ID 0) should be silently skipped,
+// but they currently fail with "unexpected section ID".
+
 // Section framing errors
 
 // Section length extends past end of component.
@@ -54,3 +49,15 @@ assertErrorMessage(() => new WebAssembly.Component(new Uint8Array([
 
   0xFF, 0x00, // unknown section ID 0xFF, length 0
 ])), WebAssembly.CompileError, /unexpected section ID/);
+
+// Section parsing stops with bytes left over
+assertErrorMessage(() => new WebAssembly.Component(new Uint8Array([
+  0, 0x61, 0x73, 0x6D,
+  0x0d, 0, 1, 0,
+
+  0x07, 0x04, // type section, data shorter than section length
+    0x00,
+  0x00, 0x06, // custom section to pad out the component
+    0x05,
+    0x64, 0x75, 0x6D, 0x6D, 0x79, // "dummy", no data
+])), WebAssembly.CompileError, /too many bytes in section/);

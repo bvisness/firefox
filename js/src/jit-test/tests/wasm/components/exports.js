@@ -87,8 +87,12 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 )
 `)), WebAssembly.CompileError, /invalid core module index 1 for export/);
 
+// TODO(wasm-cm): Export name uniqueness validation not yet implemented.
+// Duplicate export names should be rejected.
+
 // Export a component - requires nested components (section ID 4) which aren't
 // supported, so the component section itself is rejected.
+// TODO(wasm-cm)
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (component)
@@ -97,6 +101,7 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 `)), WebAssembly.CompileError, /unexpected section ID/);
 
 // Export a component instance - also requires nested components.
+// TODO(wasm-cm)
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (component)

@@ -133,6 +133,7 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // Tuple: elements flatten like record fields.
+// TODO(wasm-cm): Currently fails at type parsing, not flattening.
 new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (tuple u32 f64 u32))
@@ -150,6 +151,7 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // List: flattens to (i32, i32) for pointer + length.
+// TODO(wasm-cm): Currently fails at type parsing, not flattening.
 new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (list u32))
@@ -167,6 +169,7 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // Flags: flattens to i32.
+// TODO(wasm-cm): Currently fails at type parsing, not flattening.
 new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (flags "read" "write" "execute"))
@@ -184,8 +187,8 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // Enum: flattens to i32 (discriminant).
-// NOTE: This currently hits MOZ_CRASH("TODO") in FlattenType - this test
-// reveals the gap. Once implemented, this should pass.
+// TODO(wasm-cm): Currently fails at type parsing. Once type parsing is
+// implemented, will hit MOZ_CRASH("TODO") in FlattenType.
 new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (enum "red" "green" "blue"))
@@ -203,7 +206,8 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // Variant: flattens to discriminant + payload.
-// NOTE: This currently hits MOZ_CRASH("TODO") in FlattenType.
+// TODO(wasm-cm): Currently fails at type parsing. Once type parsing is
+// implemented, will hit MOZ_CRASH("TODO") in FlattenType.
 new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (variant (case "none") (case "some" u32)))
@@ -221,7 +225,8 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // Option: flattens to discriminant (i32) + payload.
-// NOTE: This currently hits MOZ_CRASH("TODO") in FlattenType.
+// TODO(wasm-cm): Currently fails at type parsing. Once type parsing is
+// implemented, will hit MOZ_CRASH("TODO") in FlattenType.
 new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (option u32))
@@ -239,7 +244,8 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // Result: flattens to discriminant + ok payload + error payload.
-// NOTE: This currently hits MOZ_CRASH("TODO") in FlattenType.
+// TODO(wasm-cm): Currently fails at type parsing. Once type parsing is
+// implemented, will hit MOZ_CRASH("TODO") in FlattenType.
 new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (result u32 (error u32)))
@@ -352,7 +358,8 @@ new WebAssembly.Component(componentWithLift(
   [], []
 ));
 
-// ---- Canon lower (TODO path) ----
+// ---- Canon lower ----
+// TODO(wasm-cm): Canon lower not yet implemented.
 
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
