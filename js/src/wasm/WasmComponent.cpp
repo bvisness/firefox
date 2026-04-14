@@ -214,8 +214,4 @@ JSObject* Component::createObject(JSContext* cx) const {
 }
 
 /* virtual */
-JSObject* Component::createObjectForAsmJS(JSContext* cx) const {
-  // Use nullptr to get the default object prototype. These objects are never
-  // exposed to script for asm.js.
-  MOZ_CRASH();
-}
+JSObject* Component::createObjectForAsmJS(JSContext* cx) const { MOZ_CRASH(); }

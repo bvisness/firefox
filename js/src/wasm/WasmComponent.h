@@ -34,39 +34,49 @@ namespace wasm {
 //
 // This type is also used for the `externdesc` type, which describes what
 // components (not core modules) can import and export, and whose cases are a
-// subset of `sort`. Sorts that are invalid for `externdesc` have the highest
-// bit set. Additionally, sorts that can be exported by core modules (core:sort)
-// have the second-highest bit set.
+// subset of `sort`. Sorts that are valid for `externdesc` have the highest bit
+// set. Additionally, sorts that can be exported by core modules (core:sort)
+// have the second-highest bit set, and correspond to wasm::DefinitionKind.
 enum class ComponentSort : uint8_t {
-  Func = 0x01,
-  Value = 0x02,
-  Type = 0x03,
-  Component = 0x04,
-  Instance = 0x05,
+  Func = 0x80 | 0x01,
+  Value = 0x80 | 0x02,
+  Type = 0x80 | 0x03,
+  Component = 0x80 | 0x04,
+  Instance = 0x80 | 0x05,
 
-  CoreFunction = 0xc0 | int(DefinitionKind::Function),
-  CoreTable = 0xc0 | int(DefinitionKind::Table),
-  CoreMemory = 0xc0 | int(DefinitionKind::Memory),
-  CoreGlobal = 0xc0 | int(DefinitionKind::Global),
-  CoreTag = 0xc0 | int(DefinitionKind::Tag),
+  CoreFunction = 0x40 | int(DefinitionKind::Function),
+  CoreTable = 0x40 | int(DefinitionKind::Table),
+  CoreMemory = 0x40 | int(DefinitionKind::Memory),
+  CoreGlobal = 0x40 | int(DefinitionKind::Global),
+  CoreTag = 0x40 | int(DefinitionKind::Tag),
 
-  CoreType = 0x80 | 0x10,
-  CoreModule = 0x11,
-  CoreInstance = 0x80 | 0x12,
+  CoreType = 0x10,
+  CoreModule = 0x80 | 0x11,
+  CoreInstance = 0x12,
 };
 
-static inline bool ComponentSortValidForExternDesc(ComponentSort sort) {
-  return (uint8_t(sort) & 0x80) == 0;
+// Checks if the given sort is valid for a component import or export (the
+// component `externdesc` type).
+inline bool ComponentSortValidForExternDesc(ComponentSort sort) {
+  return (uint8_t(sort) & 0x80) != 0;
 }
 
-static inline bool ComponentSortIsCoreSort(ComponentSort sort) {
+// Checks if the given sort is for a core item that can be imported or exported,
+// i.e. a DefinitionKind imported into the component model. To extract the
+// underlying DefinitionKind, use CoreSortFromComponentSort.
+inline bool ComponentSortIsCoreSort(ComponentSort sort) {
   return (uint8_t(sort) & 0x40) != 0;
 }
 
-static inline DefinitionKind CoreSortFromComponentSort(ComponentSort sort) {
+// Extracts the underlying DefinitionKind from a ComponentSort (if there is
+// one).
+inline DefinitionKind CoreSortFromComponentSort(ComponentSort sort) {
+  MOZ_ASSERT(ComponentSortIsCoreSort(sort));
   return DefinitionKind(uint8_t(sort) & ~0xc0);
 }
 
+// Every kind of type that can be defined in the component model. Not all types
+// are valid in all contexts.
 enum class ComponentTypeKind : uint8_t {
   Bool = 0x7f,
   S8 = 0x7e,
@@ -99,10 +109,14 @@ enum class ComponentTypeKind : uint8_t {
   Resource = 0x3f,  // resource types with callbacks are not a separate kind
 };
 
+// Checks if the given kind is for a primitive type (`primvaltype`), i.e. one
+// that doesn't need to be defined and referenced.
 inline bool ComponentTypeKindIsPrimitive(ComponentTypeKind kind) {
   return ComponentTypeKind::String <= kind && kind <= ComponentTypeKind::Bool;
 }
 
+// Checks if the given kind is for a value type (`valtype`), i.e. one that can
+// be used for function parameters.
 inline bool ComponentTypeKindIsValueType(ComponentTypeKind kind) {
   return ComponentTypeKindIsPrimitive(kind) ||
          (ComponentTypeKind::Borrow <= kind &&
@@ -111,6 +125,8 @@ inline bool ComponentTypeKindIsValueType(ComponentTypeKind kind) {
          );
 }
 
+// A value type in the component model, i.e. one that can be used in function
+// parameters or other value contexts.
 class ComponentValType {
   static constexpr uint32_t TypeIndexFlag = 1 << 31;
   uint32_t bits_;
@@ -118,10 +134,12 @@ class ComponentValType {
   explicit ComponentValType(uint32_t bits) : bits_(bits) {}
 
  public:
+  // Creates a ComponentValType for a primitive (i.e. not a type reference).
   static ComponentValType primitive(ComponentTypeKind kind) {
     MOZ_ASSERT(ComponentTypeKindIsPrimitive(kind));
     return ComponentValType(uint32_t(kind));
   }
+  // Creates a ComponentValType referencing another type in the component.
   static ComponentValType typeIndex(uint32_t idx) {
     MOZ_ASSERT(!(idx & TypeIndexFlag));
     return ComponentValType(TypeIndexFlag | idx);
@@ -170,6 +188,7 @@ struct ComponentFuncType {
   bool isAsync;
 };
 
+// A type defined within a component.
 class ComponentDefType {
   ComponentTypeKind kind_;
 
@@ -230,10 +249,17 @@ class ComponentDefType {
 [[nodiscard]] bool FlattenRecord(const Component& c,
                                  const ComponentRecordFieldVector& fields,
                                  ValTypeVector* result);
-
 mozilla::Maybe<FuncType> FlattenFuncType(const Component& c,
                                          const ComponentFuncType& ft);
 
+// An alias to another item defined in the component model, usually in a core or
+// component instance, but also possibly an "outer" alias referring to an item
+// defined in a parent component.
+//
+// All three possible kinds of aliases (component export, core export, and
+// outer) boil down to two u32 indexes, the first referring to a component
+// instance or core instance, and the second referring to an item within some
+// index space on that instance.
 class ComponentAlias {
   // For export aliases, the index of the component instance or core instance.
   // For outer aliases, the number of enclosing components to jump out to.
@@ -347,6 +373,7 @@ struct CoreInstanceDescFromInlineExports {
 using CoreInstanceDesc = mozilla::Variant<CoreInstanceDescFromModule,
                                           CoreInstanceDescFromInlineExports>;
 
+// Describes an import or export from a wasm component.
 class ComponentExternDesc {
   ComponentSort sort_;
 
