@@ -5278,7 +5278,14 @@ bool wasm::DecodeComponentExport(Decoder& d, MutableComponent& c) {
   if (!DecodeName(d, &exportName)) {
     return d.fail("expected export name");
   }
-  // TODO: Validate that this name is strongly-unique
+  bool duplicate;
+  if (!c->exportNameDedup.add(exportName.utf8Bytes(), &duplicate)) {
+    return false;
+  }
+  if (duplicate) {
+    return d.failf("export name \"%.*s\" is not strongly-unique",
+                   CacheableName_Printf(exportName));
+  }
   // TODO: Validate that the name is well-formed (perhaps this should be lifted
   // to a utility like DecodeComponentName)
 
