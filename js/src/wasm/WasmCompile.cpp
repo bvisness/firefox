@@ -1061,6 +1061,16 @@ static SharedComponent CompileComponent(
     {
       Decoder d(sectionBytes, sectionOffset, error, warnings);
       switch (sectionID) {
+        case 0: {  // core:custom
+          if (!d.readBytes(sectionLength)) {
+            d.fail("expected custom section");
+            return nullptr;
+          }
+
+          // TODO(wasm-cm): Parse custom section name, warn if it is "malformed"
+          // TODO(wasm-cm): Parse component name section
+        } break;
+
         case 1: {  // core:module
           // TODO: Implementation limit on number of core modules (before
           // parsing)
