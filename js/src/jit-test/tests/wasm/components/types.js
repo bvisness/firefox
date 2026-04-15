@@ -1,4 +1,5 @@
-// Primitive types - each can be defined standalone.
+// ----------------------------------------------------------------------------
+// Primitive types
 {
   const primitives = [
     "bool", "s8", "u8", "s16", "u16", "s32", "u32",
@@ -13,6 +14,7 @@
   }
 }
 
+// ----------------------------------------------------------------------------
 // Record types
 
 // Basic record.
@@ -23,12 +25,11 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // Empty record - should fail (spec requires at least one field).
-// TODO(wasm-cm): Validation not yet implemented; currently accepted.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (record))
 )
-`)), WebAssembly.CompileError, /./);
+`)), WebAssembly.CompileError, /at least one field/);
 
 // Record with type reference to a previously-defined type.
 new WebAssembly.Component(wasmTextToBinary(`
@@ -53,7 +54,6 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 `)), WebAssembly.CompileError, /invalid type index/);
 
 // Record referencing non-value type (func type).
-// TODO(wasm-cm): Validation not yet implemented; currently accepted.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (func (param "a" s32) (result s32)))
@@ -63,13 +63,13 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 
 // Duplicate field names in a record - should fail (labels must be
 // strongly-unique per spec).
-// TODO(wasm-cm): Validation not yet implemented; currently accepted.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (record (field "x" u32) (field "x" u32)))
 )
-`)), WebAssembly.CompileError, /./);
+`)), WebAssembly.CompileError, /not strongly-unique/);
 
+// ----------------------------------------------------------------------------
 // Variant types
 // TODO(wasm-cm): Variant type parsing (0x71) not yet implemented.
 

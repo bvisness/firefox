@@ -4968,13 +4968,17 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
 
     case 0x72: {  // record
       ComponentRecordFieldVector fields;
+      StronglyUniqueNameSet fieldNameDedup;
 
       uint32_t numFields;
       if (!d.readVarU32(&numFields)) {
         return d.fail("expected number of record fields");
       }
+      if (numFields == 0) {
+        return d.fail("records must have at least one field");
+      }
 
-      // TODO: Implementation limit on number of record fields
+      // TODO(wasm-cm): Implementation limit on number of record fields
       if (!fields.reserve(numFields)) {
         return false;
       }
@@ -4989,6 +4993,14 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
           return false;
         }
 
+        bool duplicate;
+        if (!fieldNameDedup.add(name.utf8Bytes(), &duplicate)) {
+          return false;
+        }
+        if (duplicate) {
+          return d.failf("record field name \"%.*s\" is not strongly-unique",
+                         CacheableName_Printf(name));
+        }
         fields.infallibleAppend(
             ComponentRecordField(std::move(name), std::move(*type)));
       }

@@ -29,6 +29,123 @@
 using namespace js;
 using namespace js::wasm;
 
+mozilla::Span<const char> attConstructor =
+    mozilla::MakeStringSpan("[constructor]");
+mozilla::Span<const char> attMethod = mozilla::MakeStringSpan("[method]");
+mozilla::Span<const char> attStatic = mozilla::MakeStringSpan("[static]");
+
+// Component model names are encoded as UTF-8, and in fact an ASCII subset of
+// UTF-8, so this is fine.
+static inline char LowercaseNameChar(char c) {
+  return ('A' <= c && c <= 'Z') ? c + ('a' - 'A') : c;
+}
+
+static inline bool NameHasPrefix(mozilla::Span<const char> name,
+                                 mozilla::Span<const char> prefix) {
+  if (name.Length() < prefix.Length()) {
+    return false;
+  }
+  return name.Subspan(0, prefix.Length()) == prefix;
+}
+
+static inline mozilla::Span<const char> TrimAttribute(
+    mozilla::Span<const char> name) {
+  if (NameHasPrefix(name, attConstructor)) {
+    return name.Subspan(attConstructor.Length());
+  }
+  if (NameHasPrefix(name, attMethod)) {
+    return name.Subspan(attMethod.Length());
+  }
+  if (NameHasPrefix(name, attStatic)) {
+    return name.Subspan(attStatic.Length());
+  }
+  return name;
+}
+
+static inline bool NameHasAttribute(mozilla::Span<const char> name) {
+  // The name should already be well-formed from parse time.
+  return name.Length() == 0 || name.data()[0] == '[';
+}
+
+HashNumber StronglyUniqueNameHasher::hash(const Lookup& aLookup) {
+  const Lookup& trimmed = TrimAttribute(aLookup);
+
+  HashNumber hash = 0;
+  for (size_t i = 0; i < trimmed.Length(); i++) {
+    char c = trimmed.data()[i];
+    if (c == '.') {
+      break;
+    }
+    hash = mozilla::AddToHash(hash, LowercaseNameChar(trimmed.data()[i]));
+  }
+  return hash;
+}
+
+bool StronglyUniqueNameHasher::match(const Key& aKey, const Lookup& aLookup) {
+  mozilla::Span<const char> newTrimmed = TrimAttribute(aLookup);
+  mozilla::Span<const char> existingTrimmed = TrimAttribute(aKey);
+
+  // Rule 1: If one name is l and the other name is [constructor]l (for the
+  // same label l), they are strongly-unique.
+  bool newIsConstructor = NameHasPrefix(aLookup, attConstructor);
+  bool existingIsConstructor = NameHasPrefix(aKey, attConstructor);
+  if (newIsConstructor != existingIsConstructor) {
+    if (newTrimmed == existingTrimmed) {
+      return false;
+    }
+  }
+
+  // Rule 2: If one name is l and the other name is [*]l.l (for the same label l
+  // and any annotation * with a dotted l.l name), they are not strongly-unique.
+  mozilla::Maybe<mozilla::Span<const char>> plain;
+  mozilla::Maybe<mozilla::Span<const char>> dotted;
+  if (!NameHasAttribute(aLookup)) {
+    plain.emplace(aLookup);
+  } else if (!NameHasAttribute(aKey)) {
+    plain.emplace(aKey);
+  }
+  if (NameHasPrefix(aLookup, attMethod) || NameHasPrefix(aLookup, attStatic)) {
+    dotted.emplace(aLookup);
+  } else if (NameHasPrefix(aKey, attMethod) || NameHasPrefix(aKey, attStatic)) {
+    dotted.emplace(aKey);
+  }
+  if (plain.isSome() && dotted.isSome()) {
+    auto dottedTrimmed = TrimAttribute(dotted.value());
+    size_t indexOfDot = dottedTrimmed.IndexOf('.');
+    MOZ_RELEASE_ASSERT(indexOfDot >= 0);
+    auto [before, after] = dottedTrimmed.SplitAt(indexOfDot);
+    after = after.Subspan(1);  // The SplitAt method includes the dot.
+    if (plain.value() == after && plain.value() == before) {
+      return true;
+    }
+  }
+
+  // Rule 3: Lowercase the names, trim attributes, and compare directly.
+  if (newTrimmed.Length() != existingTrimmed.Length()) {
+    return false;
+  }
+  for (size_t i = 0; i < newTrimmed.Length(); i++) {
+    if (LowercaseNameChar(newTrimmed[i]) !=
+        LowercaseNameChar(existingTrimmed[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool StronglyUniqueNameSet::add(mozilla::Span<const char> name,
+                                bool* duplicate) {
+  *duplicate = false;
+
+  auto p = data_.lookupForAdd(name);
+  if (p) {
+    *duplicate = true;
+    return true;
+  }
+
+  return data_.add(p, std::move(name));
+}
+
 ComponentExport::ComponentExport(CacheableName&& fieldName, uint32_t index,
                                  ComponentSort sort,
                                  CacheableName&& versionSuffix)

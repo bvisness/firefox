@@ -401,6 +401,28 @@ class ComponentExternDesc {
   ComponentSort sort() const { return sort_; }
 };
 
+// A hash policy for StronglyUniqueNameSet that hashes items based on their
+// trimmed, lowercased versions, but matches based on the full strongly-unique
+// rules.
+struct StronglyUniqueNameHasher {
+  using Key = mozilla::Span<const char>;
+  using Lookup = mozilla::Span<const char>;
+
+  static HashNumber hash(const Lookup& aLookup);
+  static bool match(const Key& aKey, const Lookup& aLookup);
+};
+
+// A class which can be used to check if a set of component model names is
+// strongly-unique.
+class StronglyUniqueNameSet {
+  mozilla::HashSet<mozilla::Span<const char>, StronglyUniqueNameHasher,
+                   SystemAllocPolicy>
+      data_;
+
+ public:
+  [[nodiscard]] bool add(mozilla::Span<const char> name, bool* duplicate);
+};
+
 class ComponentExport {
  public:
   struct CacheablePod {
@@ -449,6 +471,9 @@ class Component : public JS::WasmComponent {
   AliasVector coreMemories;
   AliasVector coreGlobals;
   AliasVector coreTags;
+
+  StronglyUniqueNameSet exportNameDedup;
+  StronglyUniqueNameSet importNameDedup;
 
   const FuncType& typeForCoreFunc(uint32_t coreFuncIdx) {
     const ComponentAlias& alias = coreFuncs[coreFuncIdx];
