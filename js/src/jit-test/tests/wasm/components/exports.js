@@ -87,6 +87,42 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 )
 `)), WebAssembly.CompileError, /invalid core module index 1 for export/);
 
+// Export name well-formedness
+// TODO(wasm-cm): Name validation not yet implemented.
+
+// Valid plain export names.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (core module)
+  (export "my-module" (core module 0))
+)
+`));
+
+// Valid interface export name.
+// TODO(wasm-cm): Should we support interface names?
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (core module)
+  (export "wasi:http/handler" (core module 0))
+)
+`)), WebAssembly.CompileError, /interface names are not supported/);
+
+// Export name must not be empty.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (core module)
+  (export "" (core module 0))
+)
+`)), WebAssembly.CompileError, /./);
+
+// Export name with invalid characters.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (core module)
+  (export "no spaces" (core module 0))
+)
+`)), WebAssembly.CompileError, /./);
+
 // Duplicate export names should be rejected.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
