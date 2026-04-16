@@ -221,6 +221,12 @@ class ComponentDefType {
   }
   explicit ComponentDefType(ComponentValTypeVector&& types)
       : kind_(ComponentTypeKind::Tuple), props_(std::move(types)) {}
+  explicit ComponentDefType(ComponentTypeKind kind,
+                            CacheableNameVector&& labels)
+      : kind_(kind), props_(std::move(labels)) {
+    MOZ_ASSERT(kind == ComponentTypeKind::Flags ||
+               kind == ComponentTypeKind::Enum);
+  }
   explicit ComponentDefType(ComponentFuncType&& funcType)
       : kind_(ComponentTypeKind::Func), props_(std::move(funcType)) {}
 
@@ -240,6 +246,12 @@ class ComponentDefType {
   }
   static ComponentDefType tuple(ComponentValTypeVector&& types) {
     return ComponentDefType(std::move(types));
+  }
+  static ComponentDefType flags(CacheableNameVector&& labels) {
+    return ComponentDefType(ComponentTypeKind::Flags, std::move(labels));
+  }
+  static ComponentDefType enum_(CacheableNameVector&& labels) {
+    return ComponentDefType(ComponentTypeKind::Enum, std::move(labels));
   }
   static ComponentDefType func(ComponentFuncType&& ft) {
     return ComponentDefType(std::move(ft));

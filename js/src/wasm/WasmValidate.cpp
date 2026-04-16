@@ -5102,6 +5102,84 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
       }
     } break;
 
+    case 0x6e: {  // flags
+      uint32_t numLabels;
+      if (!d.readVarU32(&numLabels)) {
+        return false;
+      }
+      if (numLabels == 0) {
+        return d.fail("flag type must have at least one label");
+      }
+      if (numLabels > 32) {
+        return d.fail("too many labels for flag type");
+      }
+
+      CacheableNameVector labels;
+      StronglyUniqueNameSet labelDedup;
+      if (!labels.reserve(numLabels)) {
+        return false;
+      }
+      for (uint32_t i = 0; i < numLabels; i++) {
+        // TODO(wasm-cm): Parse component names
+        CacheableName name;
+        if (!DecodeName(d, &name)) {
+          return d.fail("expected flag label");
+        }
+        bool duplicate;
+        if (!labelDedup.add(name.utf8Bytes(), &duplicate)) {
+          return false;
+        }
+        if (duplicate) {
+          return d.failf("flag label \"%.*s\" is not strongly-unique",
+                         CacheableName_Printf(name));
+        }
+
+        labels.infallibleAppend(std::move(name));
+      }
+
+      if (!c->types.append(ComponentDefType::flags(std::move(labels)))) {
+        return false;
+      }
+    } break;
+
+    case 0x6d: {  // enum
+      uint32_t numCases;
+      if (!d.readVarU32(&numCases)) {
+        return false;
+      }
+      if (numCases == 0) {
+        return d.fail("enum must have at least one case");
+      }
+      // TODO(wasm-cm): Implementation limit for enum cases
+
+      CacheableNameVector labels;
+      StronglyUniqueNameSet caseLabelDedup;
+      if (!labels.reserve(numCases)) {
+        return false;
+      }
+      for (uint32_t i = 0; i < numCases; i++) {
+        // TODO(wasm-cm): Parse component names
+        CacheableName name;
+        if (!DecodeName(d, &name)) {
+          return d.fail("expected enum case label");
+        }
+        bool duplicate;
+        if (!caseLabelDedup.add(name.utf8Bytes(), &duplicate)) {
+          return false;
+        }
+        if (duplicate) {
+          return d.failf("enum case label \"%.*s\" is not strongly-unique",
+                         CacheableName_Printf(name));
+        }
+
+        labels.infallibleAppend(std::move(name));
+      }
+
+      if (!c->types.append(ComponentDefType::enum_(std::move(labels)))) {
+        return false;
+      }
+    } break;
+
     case 0x40:
     case 0x43: {  // functype (possibly async)
       ComponentFuncType ft;
