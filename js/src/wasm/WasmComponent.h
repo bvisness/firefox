@@ -207,11 +207,13 @@ class ComponentDefType {
   TypeProps props_;
 
   explicit ComponentDefType(ComponentTypeKind kind)
-      : kind_(kind), props_(mozilla::Nothing()) {}
+      : kind_(kind), props_(mozilla::Nothing()) {
+    MOZ_ASSERT(ComponentTypeKindIsPrimitive(kind));
+  }
   explicit ComponentDefType(ComponentRecordFieldVector&& fields)
       : kind_(ComponentTypeKind::Record), props_(std::move(fields)) {}
   explicit ComponentDefType(ComponentVariantCaseVector&& cases)
-      : kind_(ComponentTypeKind::Record), props_(std::move(cases)) {}
+      : kind_(ComponentTypeKind::Variant), props_(std::move(cases)) {}
   explicit ComponentDefType(ComponentTypeKind kind, ComponentValType&& type)
       : kind_(kind), props_(std::move(type)) {
     MOZ_ASSERT(kind == ComponentTypeKind::List ||
