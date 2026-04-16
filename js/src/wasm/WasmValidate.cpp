@@ -5001,11 +5001,66 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
           return d.failf("record field name \"%.*s\" is not strongly-unique",
                          CacheableName_Printf(name));
         }
-        fields.infallibleAppend(
-            ComponentRecordField(std::move(name), std::move(*type)));
+        fields.infallibleAppend(ComponentRecordField(std::move(name), *type));
       }
 
       if (!c->types.append(ComponentDefType::record(std::move(fields)))) {
+        return false;
+      }
+    } break;
+
+    case 0x71: {  // variant
+      ComponentVariantCaseVector cases;
+      StronglyUniqueNameSet caseNameDedup;
+
+      uint32_t numCases;
+      if (!d.readVarU32(&numCases)) {
+        return d.fail("expected number of variant cases");
+      }
+      if (numCases == 0) {
+        return d.fail("variants must have at least one case");
+      }
+
+      // TODO(wasm-cm): Implementation limit on number of variant cases
+      if (!cases.reserve(numCases)) {
+        return false;
+      }
+
+      for (uint32_t i = 0; i < numCases; i++) {
+        CacheableName name;
+        if (!DecodeName(d, &name)) {
+          return d.fail("expected variant case name");
+        }
+
+        mozilla::Maybe<ComponentValType> type;
+        uint8_t hasType;
+        if (!d.readFixedU8(&hasType) || hasType > 0x01) {
+          return d.fail("expected optional variant case type");
+        }
+        if (hasType) {
+          type = DecodeComponentValType(d, c);
+          if (type.isNothing()) {
+            return false;
+          }
+        }
+
+        uint8_t dummy;
+        if (!d.readFixedU8(&dummy) || dummy != 0x00) {
+          return d.fail("expected trailing zero on variant case");
+        }
+
+        bool duplicate;
+        if (!caseNameDedup.add(name.utf8Bytes(), &duplicate)) {
+          return false;
+        }
+        if (duplicate) {
+          return d.failf("variant case name \"%.*s\" is not strongly-unique",
+                         CacheableName_Printf(name));
+        }
+        cases.infallibleAppend(ComponentVariantCase(std::move(name), type));
+      }
+
+      if (!c->types.append(ComponentDefType::variant(std::move(cases)))) {
         return false;
       }
     } break;

@@ -71,7 +71,6 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 
 // ----------------------------------------------------------------------------
 // Variant types
-// TODO(wasm-cm): Variant type parsing (0x71) not yet implemented.
 
 // Basic variant.
 new WebAssembly.Component(wasmTextToBinary(`
@@ -87,13 +86,12 @@ new WebAssembly.Component(wasmTextToBinary(`
 )
 `));
 
-// Empty variant - should fail (spec requires at least one case).
-// TODO(wasm-cm): Validation not yet implemented.
+// Empty variant (invalid).
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (variant))
 )
-`)), WebAssembly.CompileError, /./);
+`)), WebAssembly.CompileError, /at least one case/);
 
 // Variant with invalid type reference.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
@@ -103,13 +101,13 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 `)), WebAssembly.CompileError, /invalid type index/);
 
 // Duplicate case names in a variant.
-// TODO(wasm-cm): Validation not yet implemented.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (variant (case "a" u32) (case "a" u32)))
 )
-`)), WebAssembly.CompileError, /./);
+`)), WebAssembly.CompileError, /not strongly-unique/);
 
+// ----------------------------------------------------------------------------
 // List types
 // TODO(wasm-cm): List type parsing (0x70) not yet implemented.
 

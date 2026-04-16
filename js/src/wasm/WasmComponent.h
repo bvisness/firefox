@@ -210,6 +210,8 @@ class ComponentDefType {
       : kind_(kind), props_(mozilla::Nothing()) {}
   explicit ComponentDefType(ComponentRecordFieldVector&& fields)
       : kind_(ComponentTypeKind::Record), props_(std::move(fields)) {}
+  explicit ComponentDefType(ComponentVariantCaseVector&& cases)
+      : kind_(ComponentTypeKind::Record), props_(std::move(cases)) {}
   explicit ComponentDefType(ComponentFuncType&& funcType)
       : kind_(ComponentTypeKind::Func), props_(std::move(funcType)) {}
 
@@ -220,6 +222,9 @@ class ComponentDefType {
   }
   static ComponentDefType record(ComponentRecordFieldVector&& fields) {
     return ComponentDefType(std::move(fields));
+  }
+  static ComponentDefType variant(ComponentVariantCaseVector&& cases) {
+    return ComponentDefType(std::move(cases));
   }
   static ComponentDefType func(ComponentFuncType&& ft) {
     return ComponentDefType(std::move(ft));
