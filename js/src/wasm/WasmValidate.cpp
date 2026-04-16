@@ -5065,6 +5065,17 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
       }
     } break;
 
+    case 0x70: {  // list
+      mozilla::Maybe<ComponentValType> type = DecodeComponentValType(d, c);
+      if (type.isNothing()) {
+        return false;
+      }
+
+      if (!c->types.append(ComponentDefType::list(type.value()))) {
+        return false;
+      }
+    } break;
+
     case 0x40:
     case 0x43: {  // functype (possibly async)
       ComponentFuncType ft;

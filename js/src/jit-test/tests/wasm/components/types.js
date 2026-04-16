@@ -109,7 +109,6 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 
 // ----------------------------------------------------------------------------
 // List types
-// TODO(wasm-cm): List type parsing (0x70) not yet implemented.
 
 // Basic list.
 new WebAssembly.Component(wasmTextToBinary(`

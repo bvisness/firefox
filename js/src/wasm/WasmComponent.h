@@ -212,6 +212,11 @@ class ComponentDefType {
       : kind_(ComponentTypeKind::Record), props_(std::move(fields)) {}
   explicit ComponentDefType(ComponentVariantCaseVector&& cases)
       : kind_(ComponentTypeKind::Record), props_(std::move(cases)) {}
+  explicit ComponentDefType(ComponentTypeKind kind, ComponentValType&& type)
+      : kind_(kind), props_(std::move(type)) {
+    MOZ_ASSERT(kind == ComponentTypeKind::List ||
+               kind == ComponentTypeKind::Option);
+  }
   explicit ComponentDefType(ComponentFuncType&& funcType)
       : kind_(ComponentTypeKind::Func), props_(std::move(funcType)) {}
 
@@ -225,6 +230,9 @@ class ComponentDefType {
   }
   static ComponentDefType variant(ComponentVariantCaseVector&& cases) {
     return ComponentDefType(std::move(cases));
+  }
+  static ComponentDefType list(ComponentValType&& type) {
+    return ComponentDefType(ComponentTypeKind::List, std::move(type));
   }
   static ComponentDefType func(ComponentFuncType&& ft) {
     return ComponentDefType(std::move(ft));
