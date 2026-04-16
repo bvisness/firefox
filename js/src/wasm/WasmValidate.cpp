@@ -5228,6 +5228,7 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
       ft.isAsync = kind == 0x43;
 
       uint32_t numParams;
+      StronglyUniqueNameSet paramDeduper;
       if (!d.readVarU32(&numParams)) {
         return d.fail("expected number of params");
       }
@@ -5246,11 +5247,22 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
           return false;
         }
 
+        bool duplicate;
+        if (!paramDeduper.add(name.utf8Bytes(), &duplicate)) {
+          return false;
+        }
+        if (duplicate) {
+          return d.failf("param name \"%.*s\" is not strongly-unique",
+                         CacheableName_Printf(name));
+        }
+
         ft.paramNames.infallibleAppend(std::move(name));
         ft.paramTypes.infallibleAppend(std::move(*type));
       }
 
-      // There is a result type if the byte is zero. Don't ask.
+      // There is a result type if the byte is zero. It is not clear why this
+      // is, but we can only hope it is fixed when the binary format is
+      // eventually reshuffled.
       uint8_t hasntResultType;
       if (!d.readFixedU8(&hasntResultType)) {
         return d.fail("expected result type");
@@ -5263,7 +5275,7 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
         }
         ft.resultType = resultType;
       } else if (hasntResultType == 1) {
-        // Hasn't indeed. Consume an extra zero for some reason.
+        // Hasn't, indeed. Consume an extra zero for some reason.
         uint8_t dummy;
         if (!d.readFixedU8(&dummy) || dummy != 0) {
           return d.fail("expected result type");

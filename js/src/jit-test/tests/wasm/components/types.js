@@ -278,6 +278,7 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 )
 `)), WebAssembly.CompileError, /./);
 
+// ----------------------------------------------------------------------------
 // Func types
 
 // Basic func type.
@@ -327,13 +328,12 @@ new WebAssembly.Component(wasmTextToBinary(`
 )
 `));
 
-// Duplicate param names - should fail (param labels must be strongly-unique).
-// TODO(wasm-cm): Validation not yet implemented; currently accepted.
+// Duplicate param names (invalid).
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (func (param "a" s32) (param "a" s32)))
 )
-`)), WebAssembly.CompileError, /./);
+`)), WebAssembly.CompileError, /not strongly-unique/);
 
 // ----------------------------------------------------------------------------
 // Name well-formedness
