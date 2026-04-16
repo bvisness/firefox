@@ -219,6 +219,8 @@ class ComponentDefType {
     MOZ_ASSERT(kind == ComponentTypeKind::List ||
                kind == ComponentTypeKind::Option);
   }
+  explicit ComponentDefType(ComponentValTypeVector&& types)
+      : kind_(ComponentTypeKind::Tuple), props_(std::move(types)) {}
   explicit ComponentDefType(ComponentFuncType&& funcType)
       : kind_(ComponentTypeKind::Func), props_(std::move(funcType)) {}
 
@@ -235,6 +237,9 @@ class ComponentDefType {
   }
   static ComponentDefType list(ComponentValType&& type) {
     return ComponentDefType(ComponentTypeKind::List, std::move(type));
+  }
+  static ComponentDefType tuple(ComponentValTypeVector&& types) {
+    return ComponentDefType(std::move(types));
   }
   static ComponentDefType func(ComponentFuncType&& ft) {
     return ComponentDefType(std::move(ft));

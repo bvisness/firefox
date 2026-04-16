@@ -5076,6 +5076,32 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
       }
     } break;
 
+    case 0x6f: {  // tuple
+      uint32_t numTypes;
+      if (!d.readVarU32(&numTypes)) {
+        return d.fail("expected number of types in tuple");
+      }
+      if (numTypes == 0) {
+        return d.fail("tuples must have at least one type");
+      }
+
+      ComponentValTypeVector types;
+      if (!types.reserve(numTypes)) {
+        return false;
+      }
+      for (uint32_t i = 0; i < numTypes; i++) {
+        mozilla::Maybe<ComponentValType> type = DecodeComponentValType(d, c);
+        if (type.isNothing()) {
+          return false;
+        }
+        types.infallibleAppend(type.value());
+      }
+
+      if (!c->types.append(ComponentDefType::tuple(std::move(types)))) {
+        return false;
+      }
+    } break;
+
     case 0x40:
     case 0x43: {  // functype (possibly async)
       ComponentFuncType ft;

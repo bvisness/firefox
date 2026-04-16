@@ -125,8 +125,8 @@ new WebAssembly.Component(wasmTextToBinary(`
 )
 `));
 
+// ----------------------------------------------------------------------------
 // Tuple types
-// TODO(wasm-cm): Tuple type parsing (0x6f) not yet implemented.
 
 // Basic tuple.
 new WebAssembly.Component(wasmTextToBinary(`
@@ -141,7 +141,7 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (tuple))
 )
-`)), WebAssembly.CompileError, /./);
+`)), WebAssembly.CompileError, /at least one type/);
 
 // Tuple with type reference.
 new WebAssembly.Component(wasmTextToBinary(`
