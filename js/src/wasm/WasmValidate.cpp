@@ -5180,6 +5180,48 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
       }
     } break;
 
+    case 0x6b: {  // option
+      mozilla::Maybe<ComponentValType> type = DecodeComponentValType(d, c);
+      if (type.isNothing()) {
+        return false;
+      }
+      if (!c->types.append(ComponentDefType::option(type.value()))) {
+        return false;
+      }
+    } break;
+
+    case 0x6a: {  // result
+      mozilla::Maybe<ComponentValType> type;
+      mozilla::Maybe<ComponentValType> errorType;
+
+      uint8_t hasType;
+      if (!d.readFixedU8(&hasType) || hasType > 0x01) {
+        return d.fail("expected optional result type");
+      }
+      if (hasType) {
+        type = DecodeComponentValType(d, c);
+        if (type.isNothing()) {
+          return false;
+        }
+      }
+
+      uint8_t hasErrorType;
+      if (!d.readFixedU8(&hasErrorType) || hasErrorType > 0x01) {
+        return d.fail("expected optional result error type");
+      }
+      if (hasErrorType) {
+        errorType = DecodeComponentValType(d, c);
+        if (errorType.isNothing()) {
+          return false;
+        }
+      }
+
+      if (!c->types.append(ComponentDefType::result(
+              ComponentResultType{.type = type, .errorType = errorType}))) {
+        return false;
+      }
+    } break;
+
     case 0x40:
     case 0x43: {  // functype (possibly async)
       ComponentFuncType ft;

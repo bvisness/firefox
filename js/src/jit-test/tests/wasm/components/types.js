@@ -211,8 +211,8 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 )
 `)), WebAssembly.CompileError, /not strongly-unique/);
 
+// ----------------------------------------------------------------------------
 // Option types
-// TODO(wasm-cm): Option type parsing (0x6b) not yet implemented.
 
 // Basic option.
 new WebAssembly.Component(wasmTextToBinary(`
@@ -229,8 +229,8 @@ new WebAssembly.Component(wasmTextToBinary(`
 )
 `));
 
+// ----------------------------------------------------------------------------
 // Result types
-// TODO(wasm-cm): Result type parsing (0x6a) not yet implemented.
 
 // Result with ok and error.
 new WebAssembly.Component(wasmTextToBinary(`
@@ -260,9 +260,9 @@ new WebAssembly.Component(wasmTextToBinary(`
 )
 `));
 
+// ----------------------------------------------------------------------------
 // Own and borrow types (resources not supported per plan)
-// TODO(wasm-cm): Resource type parsing (0x3f) not yet implemented; these
-// fail at the resource definition, not at own/borrow.
+// TODO(wasm-cm): Resource type parsing (0x3f) not yet implemented
 
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
