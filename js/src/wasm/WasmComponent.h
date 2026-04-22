@@ -19,12 +19,14 @@
 #ifndef wasm_component_h
 #define wasm_component_h
 
-#include "js/WasmComponent.h"
+#ifdef ENABLE_WASM_COMPONENTS
 
-#include "mozilla/RefPtr.h"
-#include "mozilla/Variant.h"
-#include "mozilla/Vector.h"
-#include "wasm/WasmModule.h"
+#  include "js/WasmComponent.h"
+
+#  include "mozilla/RefPtr.h"
+#  include "mozilla/Variant.h"
+#  include "mozilla/Vector.h"
+#  include "wasm/WasmModule.h"
 
 namespace js {
 namespace wasm {
@@ -582,4 +584,6 @@ using SharedComponent = RefPtr<const Component>;
 }  // namespace wasm
 }  // namespace js
 
-#endif
+#endif  // ENABLE_WASM_COMPONENTS
+
+#endif  // wasm_component_h

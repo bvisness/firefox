@@ -128,6 +128,7 @@ class WasmModuleObject : public NativeObject {
   const wasm::Module& module() const;
 };
 
+#ifdef ENABLE_WASM_COMPONENTS
 // The class of WebAssembly.Component.
 // TODO(wasm-cm): Leave a more descriptive comment. See WasmModuleObject for
 // comparison.
@@ -152,6 +153,7 @@ class WasmComponentObject : public NativeObject {
                                      HandleObject proto);
   const wasm::Component& component() const;
 };
+#endif
 
 // The class of WebAssembly.Global.  This wraps a storage location, and there is
 // a per-agent one-to-one relationship between the WasmGlobalObject and the

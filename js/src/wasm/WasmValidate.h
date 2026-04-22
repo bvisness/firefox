@@ -173,12 +173,14 @@ using ValidatingOpIter = OpIter<ValidatingPolicy>;
 [[nodiscard]] bool DecodeUTF8Bytes(Decoder& d, uint32_t numBytes,
                                    UTF8Bytes* bytes);
 
+#ifdef ENABLE_WASM_COMPONENTS
 [[nodiscard]] bool DecodeCoreInstance(Decoder& d, MutableComponent& c);
 [[nodiscard]] bool DecodeComponentType(Decoder& d, MutableComponent& c);
 [[nodiscard]] bool DecodeComponentAlias(Decoder& d, MutableComponent& c);
 [[nodiscard]] bool DecodeComponentCanonDef(Decoder& d, MutableComponent& c);
 [[nodiscard]] bool DecodeComponentImport(Decoder& d, MutableComponent& c);
 [[nodiscard]] bool DecodeComponentExport(Decoder& d, MutableComponent& c);
+#endif
 
 struct NopOpDumper {
   void dumpOpBegin(OpBytes op) {}

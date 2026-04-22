@@ -7,12 +7,14 @@
 #ifndef js_WasmComponent_h
 #define js_WasmComponent_h
 
-#include "mozilla/RefPtr.h"  // RefPtr
+#ifdef ENABLE_WASM_COMPONENTS
 
-#include "jstypes.h"  // JS_PUBLIC_API
+#  include "mozilla/RefPtr.h"  // RefPtr
 
-#include "js/RefCounted.h"  // AtomicRefCounted
-#include "js/TypeDecls.h"   // HandleObject
+#  include "jstypes.h"  // JS_PUBLIC_API
+
+#  include "js/RefCounted.h"  // AtomicRefCounted
+#  include "js/TypeDecls.h"   // HandleObject
 
 namespace JS {
 
@@ -32,5 +34,7 @@ extern JS_PUBLIC_API bool IsWasmComponentObject(HandleObject obj);
 extern JS_PUBLIC_API RefPtr<WasmComponent> GetWasmComponent(HandleObject obj);
 
 }  // namespace JS
+
+#endif /* ENABLE_WASM_COMPONENTS */
 
 #endif /* js_WasmComponent_h */

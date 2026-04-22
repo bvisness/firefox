@@ -4734,6 +4734,8 @@ bool wasm::DecodeModuleTail(Decoder& d, CodeMetadata* codeMeta,
   return true;
 }
 
+#ifdef ENABLE_WASM_COMPONENTS
+
 bool wasm::DecodeCoreInstance(Decoder& d, MutableComponent& c) {
   uint8_t exprType;
   if (!d.readFixedU8(&exprType)) {
@@ -5772,6 +5774,8 @@ bool wasm::DecodeComponentExport(Decoder& d, MutableComponent& c) {
   return true;
 }
 
+#endif  // ENABLE_WASM_COMPONENTS
+
 // Validate algorithm.
 
 bool wasm::Validate(JSContext* cx, const BytecodeSource& bytecode,
@@ -5795,11 +5799,13 @@ bool wasm::Validate(JSContext* cx, const BytecodeSource& bytecode,
                       &isComponent)) {
     return false;
   }
+#ifdef ENABLE_WASM_COMPONENTS
   if (isComponent) {
     // TODO(wasm-cm)
     envDecoder.fail("standalone validation of components is not supported");
     return false;
   }
+#endif
 
   if (!DecodeModuleEnvironment(envDecoder, codeMeta, moduleMeta)) {
     return false;

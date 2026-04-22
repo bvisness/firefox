@@ -1783,6 +1783,8 @@ const Module& WasmModuleObject::module() const {
 // ============================================================================
 // WebAssembly.Component class and methods
 
+#ifdef ENABLE_WASM_COMPONENTS
+
 const JSClassOps WasmComponentObject::classOps_ = {
     nullptr,                        // addProperty
     nullptr,                        // delProperty
@@ -1974,6 +1976,8 @@ const Component& WasmComponentObject::component() const {
   MOZ_ASSERT(is<WasmComponentObject>());
   return *(const Component*)getReservedSlot(COMPONENT_SLOT).toPrivate();
 }
+
+#endif  // ENABLE_WASM_COMPONENTS
 
 // ============================================================================
 // WebAssembly.Instance class and methods
@@ -5872,7 +5876,6 @@ static bool WebAssemblyClassFinish(JSContext* cx, HandleObject object,
 
   constexpr NameAndProtoKey entries[] = {
       {"Module", JSProto_WasmModule},
-      {"Component", JSProto_WasmComponent},
       {"Instance", JSProto_WasmInstance},
       {"Memory", JSProto_WasmMemory},
       {"Table", JSProto_WasmTable},
@@ -5924,6 +5927,17 @@ static bool WebAssemblyClassFinish(JSContext* cx, HandleObject object,
                           JSPROP_READONLY | JSPROP_ENUMERATE)) {
     return false;
   }
+
+#ifdef ENABLE_WASM_COMPONENTS
+  if (ComponentsAvailable(cx)) {
+    constexpr NameAndProtoKey componentEntry = {"Component",
+                                                JSProto_WasmComponent};
+    if (!WebAssemblyDefineConstructor(cx, wasm, componentEntry, &ctorValue,
+                                      &id)) {
+      return false;
+    }
+  }
+#endif
 
 #ifdef ENABLE_WASM_JSPI
   constexpr NameAndProtoKey jspiEntries[] = {

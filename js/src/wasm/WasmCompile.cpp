@@ -1026,6 +1026,7 @@ static SharedModule CompileModule(Decoder& d, const CompileArgs& args,
   return mg.finishModule(bytecode, *moduleMeta, listener);
 }
 
+#ifdef ENABLE_WASM_COMPONENTS
 static SharedComponent CompileComponent(
     Decoder& d, const CompileArgs& args, const BytecodeBufferOrSource& bytecode,
     UniqueChars* error, UniqueCharsVector* warnings,
@@ -1221,6 +1222,7 @@ SharedModuleOrComponent wasm::CompileBuffer(
   }
   return SharedModuleOrComponent(module);
 }
+#endif  // ENABLE_WASM_COMPONENTS
 
 SharedModule wasm::CompileBufferModule(
     const CompileArgs& args, const BytecodeBufferOrSource& bytecode,
@@ -1239,6 +1241,7 @@ SharedModule wasm::CompileBufferModule(
   return CompileModule(envDecoder, args, bytecode, error, warnings, listener);
 }
 
+#ifdef ENABLE_WASM_COMPONENTS
 SharedComponent wasm::CompileBufferComponent(
     const CompileArgs& args, const BytecodeBufferOrSource& bytecode,
     UniqueChars* error, UniqueCharsVector* warnings,
@@ -1259,6 +1262,7 @@ SharedComponent wasm::CompileBufferComponent(
 
   return CompileComponent(d, args, bytecode, error, warnings, listener);
 }
+#endif  // ENABLE_WASM_COMPONENTS
 
 bool wasm::CompileCompleteTier2(const ShareableBytes* codeSection,
                                 const Module& module, UniqueChars* error,
@@ -1387,11 +1391,13 @@ SharedModule wasm::CompileStreaming(
                         &isComponent)) {
       return nullptr;
     }
+#ifdef ENABLE_WASM_COMPONENTS
     if (isComponent) {
       // TODO(wasm-cm)
       d.fail("streaming compilation of components is not supported yet");
       return nullptr;
     }
+#endif
 
     if (!DecodeModuleEnvironment(d, &codeMeta, moduleMeta)) {
       return nullptr;

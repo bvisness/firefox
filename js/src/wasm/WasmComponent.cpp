@@ -18,13 +18,15 @@
 
 #include "wasm/WasmComponent.h"
 
-#include "js/experimental/TypedData.h"  // JS_NewUint8Array
-#include "js/friend/ErrorMessages.h"    // js::GetErrorMessage, JSMSG_*
-#include "js/PropertyAndElement.h"  // JS_DefineProperty, JS_DefinePropertyById
-#include "vm/GlobalObject.h"
-#include "vm/PlainObject.h"  // js::PlainObject
-#include "vm/Warnings.h"     // WarnNumberASCII
-#include "wasm/WasmJS.h"
+#ifdef ENABLE_WASM_COMPONENTS
+
+#  include "js/experimental/TypedData.h"  // JS_NewUint8Array
+#  include "js/friend/ErrorMessages.h"    // js::GetErrorMessage, JSMSG_*
+#  include "js/PropertyAndElement.h"  // JS_DefineProperty, JS_DefinePropertyById
+#  include "vm/GlobalObject.h"
+#  include "vm/PlainObject.h"  // js::PlainObject
+#  include "vm/Warnings.h"     // WarnNumberASCII
+#  include "wasm/WasmJS.h"
 
 using namespace js;
 using namespace js::wasm;
@@ -404,3 +406,5 @@ JSObject* Component::createObject(JSContext* cx) const {
 
 /* virtual */
 JSObject* Component::createObjectForAsmJS(JSContext* cx) const { MOZ_CRASH(); }
+
+#endif  // ENABLE_WASM_COMPONENTS
