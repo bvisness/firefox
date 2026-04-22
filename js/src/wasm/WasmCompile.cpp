@@ -1148,6 +1148,20 @@ static SharedComponent CompileComponent(
             }
           }
         } break;
+        case 10: {  // vec(import)
+          uint32_t numImports;
+          if (!d.readVarU32(&numImports)) {
+            d.fail("expected number of imports");
+            return nullptr;
+          }
+          // TODO: Implementation limit on number of imports?
+
+          for (uint32_t i = 0; i < numImports; i++) {
+            if (!DecodeComponentImport(d, c)) {
+              return nullptr;
+            }
+          }
+        } break;
         case 11: {  // vec(export)
           uint32_t numExports;
           if (!d.readVarU32(&numExports)) {

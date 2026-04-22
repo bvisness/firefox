@@ -146,18 +146,6 @@ bool StronglyUniqueNameSet::add(mozilla::Span<const char> name,
   return data_.add(p, std::move(name));
 }
 
-ComponentExport::ComponentExport(CacheableName&& fieldName, uint32_t index,
-                                 ComponentSort sort,
-                                 CacheableName&& versionSuffix)
-    : name_(std::move(fieldName)), versionSuffix_(std::move(versionSuffix)) {
-  pod.sort_ = sort;
-  pod.index_ = index;
-}
-
-ComponentExternDesc ComponentExport::implicitExternDesc(Component& c) {
-  MOZ_CRASH("TODO");
-}
-
 mozilla::Maybe<FuncType> wasm::FlattenFuncType(const Component& c,
                                                const ComponentFuncType& ft) {
   ValTypeVector params;

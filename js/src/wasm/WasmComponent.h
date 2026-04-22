@@ -417,7 +417,8 @@ using CoreInstanceDesc = mozilla::Variant<CoreInstanceDescFromModule,
 class ComponentExternDesc {
   ComponentSort sort_;
 
-  // Used for kinds CoreModule, Component, Instance, and the `eq` case of Type.
+  // Used for kinds CoreModule, Func, Component, Instance, and the `eq` case of
+  // Type.
   uint32_t typeIndex_;
 
   explicit ComponentExternDesc(ComponentSort sort) : sort_(sort) {
@@ -427,14 +428,14 @@ class ComponentExternDesc {
  public:
   ComponentExternDesc() = default;
 
-  static ComponentExternDesc func(uint32_t funcIdx) {
+  static ComponentExternDesc func(uint32_t funcTypeIdx) {
     ComponentExternDesc desc(ComponentSort::Func);
-    desc.typeIndex_ = funcIdx;
+    desc.typeIndex_ = funcTypeIdx;
     return desc;
   }
-  static ComponentExternDesc coreModule(uint32_t typeIdx) {
+  static ComponentExternDesc coreModule(uint32_t coreModuleTypeIdx) {
     ComponentExternDesc desc(ComponentSort::CoreModule);
-    desc.typeIndex_ = typeIdx;
+    desc.typeIndex_ = coreModuleTypeIdx;
     return desc;
   }
 
@@ -463,26 +464,32 @@ class StronglyUniqueNameSet {
   [[nodiscard]] bool add(mozilla::Span<const char> name, bool* duplicate);
 };
 
-class ComponentExport {
- public:
-  struct CacheablePod {
-    ComponentSort sort_;
-    uint32_t index_;
-
-    WASM_CHECK_CACHEABLE_POD(sort_, index_);
-  };
-
- private:
+class ComponentImport {
   CacheableName name_;
-  CacheableName versionSuffix_;
-  CacheablePod pod;
+  ComponentExternDesc externDesc_;
 
  public:
-  ComponentExport() = default;
-  explicit ComponentExport(CacheableName&& name, uint32_t index,
-                           ComponentSort sort, CacheableName&& versonSuffix);
+  explicit ComponentImport(CacheableName&& name,
+                           const ComponentExternDesc& externDesc)
+      : name_(std::move(name)), externDesc_(externDesc) {}
 
-  ComponentExternDesc implicitExternDesc(Component& c);
+  const CacheableName& name() const { return name_; }
+  const ComponentExternDesc& externDesc() const { return externDesc_; }
+};
+
+class ComponentExport {
+  CacheableName name_;
+  ComponentSort sort_;
+  uint32_t index_;
+
+ public:
+  explicit ComponentExport(CacheableName&& name, ComponentSort sort,
+                           uint32_t index)
+      : name_(std::move(name)), sort_(sort), index_(index) {}
+
+  const CacheableName& name() const { return name_; }
+  ComponentSort sort() const { return sort_; }
+  uint32_t index() const { return index_; }
 };
 
 class Component : public JS::WasmComponent {
@@ -492,6 +499,7 @@ class Component : public JS::WasmComponent {
   using TypeVector = mozilla::Vector<ComponentDefType, 0, SystemAllocPolicy>;
   using FuncVector =
       mozilla::Vector<ComponentLiftedFuncDesc, 0, SystemAllocPolicy>;
+  using ImportVector = Vector<ComponentImport, 0, SystemAllocPolicy>;
   using ExportVector = Vector<ComponentExport, 0, SystemAllocPolicy>;
   using AliasVector = Vector<ComponentAlias, 0, SystemAllocPolicy>;
 
@@ -504,6 +512,7 @@ class Component : public JS::WasmComponent {
   CoreInstanceVector coreInstances;
   TypeVector types;
   FuncVector funcs;
+  ImportVector imports;
   ExportVector exports;
 
   AliasVector coreFuncs;  // TODO: This will have to accommodate lowered funcs
@@ -512,8 +521,8 @@ class Component : public JS::WasmComponent {
   AliasVector coreGlobals;
   AliasVector coreTags;
 
-  StronglyUniqueNameSet exportNameDedup;
   StronglyUniqueNameSet importNameDedup;
+  StronglyUniqueNameSet exportNameDedup;
 
   const FuncType& typeForCoreFunc(uint32_t coreFuncIdx) {
     const ComponentAlias& alias = coreFuncs[coreFuncIdx];

@@ -4893,26 +4893,32 @@ bool wasm::DecodeCoreInstance(Decoder& d, MutableComponent& c) {
 
   switch (kind) {
     case ComponentSort::Func: {
-      uint32_t funcIdx;
-      if (!d.readVarU32(&funcIdx)) {
-        return d.fail("expected func index");
+      uint32_t funcTypeIdx;
+      if (!d.readVarU32(&funcTypeIdx)) {
+        return d.fail("expected func type index");
       }
-      *desc = ComponentExternDesc::func(funcIdx);
+      // TODO(wasm-cm): Validate the the index exists and is a func type
+      *desc = ComponentExternDesc::func(funcTypeIdx);
     } break;
     case ComponentSort::Value: {
-      return d.fail("TODO: extern values are not supported yet");
+      // TODO(wasm-cm): Add support for these
+      return d.fail("extern values are not supported yet");
     } break;
     case ComponentSort::Type: {
-      return d.fail("TODO: extern types are not supported yet");
+      // TODO(wasm-cm): Add support for these
+      return d.fail("extern types are not supported yet");
     } break;
     case ComponentSort::Component: {
-      return d.fail("TODO: extern components are not supported yet");
+      // TODO(wasm-cm): Add support for these
+      return d.fail("extern components are not supported yet");
     } break;
     case ComponentSort::Instance: {
-      return d.fail("TODO: extern instances are not supported yet");
+      // TODO(wasm-cm): Add support for these
+      return d.fail("extern instances are not supported yet");
     } break;
     case ComponentSort::CoreModule: {
-      return d.fail("TODO: extern core modules are not supported yet");
+      // TODO(wasm-cm): Add support for these
+      return d.fail("extern core modules are not supported yet");
     } break;
     default:
       MOZ_CRASH();
@@ -5624,6 +5630,43 @@ bool wasm::DecodeComponentCanonDef(Decoder& d, MutableComponent& c) {
   return true;
 }
 
+bool wasm::DecodeComponentImport(Decoder& d, MutableComponent& c) {
+  uint8_t importFlags;
+  if (!d.readFixedU8(&importFlags)) {
+    return d.fail("expected import flags");
+  }
+  if (importFlags > 0x01) {
+    return d.failf("invalid import flags %#x", importFlags);
+  }
+
+  if (importFlags == 0x01) {
+    return d.fail("version suffixes on imports are not allowed");
+  }
+
+  CacheableName importName;
+  if (!DecodeComponentName(d, "import", &importName, /*allowMethods=*/true)) {
+    return false;
+  }
+  bool duplicate;
+  if (!c->importNameDedup.add(importName.utf8Bytes(), &duplicate)) {
+    return false;
+  }
+  if (duplicate) {
+    return d.failf("import name \"%.*s\" is not strongly-unique",
+                   CacheableName_Printf(importName));
+  }
+
+  ComponentExternDesc externDesc;
+  if (!DecodeComponentExternDesc(d, &externDesc)) {
+    return false;
+  }
+
+  if (!c->imports.emplaceBack(std::move(importName), externDesc)) {
+    return false;
+  }
+  return true;
+}
+
 bool wasm::DecodeComponentExport(Decoder& d, MutableComponent& c) {
   uint8_t exportFlags;
   if (!d.readFixedU8(&exportFlags)) {
@@ -5633,8 +5676,12 @@ bool wasm::DecodeComponentExport(Decoder& d, MutableComponent& c) {
     return d.failf("invalid export flags %#x", exportFlags);
   }
 
+  if (exportFlags == 0x01) {
+    return d.fail("version suffixes on exports are not allowed");
+  }
+
   CacheableName exportName;
-  if (!DecodeComponentName(d, "export", &exportName, /*allowMethods=*/false)) {
+  if (!DecodeComponentName(d, "export", &exportName, /*allowMethods=*/true)) {
     return false;
   }
   bool duplicate;
@@ -5646,15 +5693,8 @@ bool wasm::DecodeComponentExport(Decoder& d, MutableComponent& c) {
                    CacheableName_Printf(exportName));
   }
 
-  CacheableName versionSuffix;
-  if (exportFlags == 0x01) {
-    if (!DecodeName(d, &versionSuffix)) {
-      return d.fail("expected version suffix");
-    }
-  }
-
-  ComponentSort exportType;
-  if (!DecodeComponentSort(d, &exportType, /*forExterndesc=*/true)) {
+  ComponentSort exportSort;
+  if (!DecodeComponentSort(d, &exportSort, /*forExterndesc=*/true)) {
     return false;
   }
 
@@ -5666,23 +5706,26 @@ bool wasm::DecodeComponentExport(Decoder& d, MutableComponent& c) {
   // Validate that the index is in range
   const char* kindStr = "";
   uint32_t numItems = 0;
-  switch (exportType) {
+  switch (exportSort) {
     case ComponentSort::Func: {
       kindStr = "function";
       numItems = c->funcs.length();
     } break;
     case ComponentSort::Value: {
-      return d.fail("TODO: exported values are not supported yet");
+      // TODO(wasm-cm): Support all export sorts
+      return d.fail("exported values are not supported yet");
     } break;
     case ComponentSort::Type: {
       kindStr = "type";
       numItems = c->types.length();
     } break;
     case ComponentSort::Component: {
-      return d.fail("TODO: exported components are not supported yet");
+      // TODO(wasm-cm): Support all export sorts
+      return d.fail("exported components are not supported yet");
     } break;
     case ComponentSort::Instance: {
-      return d.fail("TODO: exported component instances are not supported yet");
+      // TODO(wasm-cm): Support all export sorts
+      return d.fail("exported component instances are not supported yet");
     } break;
     case ComponentSort::CoreModule: {
       kindStr = "core module";
@@ -5705,22 +5748,17 @@ bool wasm::DecodeComponentExport(Decoder& d, MutableComponent& c) {
       return false;
     }
 
-    // TODO: Validate that the exported thing matches the explicit externdesc
+    // TODO(wasm-cm): Validate that the exported thing matches the explicit
+    // externdesc
   }
 
-  // TODO: Validate that all resource types used (transitively!) in the
+  // TODO(wasm-cm): Validate that all resource types used (transitively!) in the
   // exported thing's type came from a preceding import or were previously
   // exported.
 
-  // TODO: Validate all the naming-related conditions
+  // TODO(wasm-cm): Validate all the naming-related conditions
 
-  // TODO: Validate that versionSuffix "is preceded by an interfaceversion
-  // matching canonversion and that the concatenation of the canonversion and
-  // the versionsuffix results in a valid semver as defined by
-  // https://semver.org." I have no idea what this could possibly mean.
-
-  if (!c->exports.emplaceBack(std::move(exportName), exportIndex, exportType,
-                              std::move(versionSuffix))) {
+  if (!c->exports.emplaceBack(std::move(exportName), exportSort, exportIndex)) {
     return false;
   }
 

@@ -177,6 +177,7 @@ using ValidatingOpIter = OpIter<ValidatingPolicy>;
 [[nodiscard]] bool DecodeComponentType(Decoder& d, MutableComponent& c);
 [[nodiscard]] bool DecodeComponentAlias(Decoder& d, MutableComponent& c);
 [[nodiscard]] bool DecodeComponentCanonDef(Decoder& d, MutableComponent& c);
+[[nodiscard]] bool DecodeComponentImport(Decoder& d, MutableComponent& c);
 [[nodiscard]] bool DecodeComponentExport(Decoder& d, MutableComponent& c);
 
 struct NopOpDumper {
