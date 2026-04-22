@@ -192,7 +192,7 @@ struct ComponentFuncType {
 class ComponentDefType {
   ComponentTypeKind kind_;
 
-  // TODO: Add component types, instance types, resource types?
+  // TODO(wasm-cm): Add component types, instance types, resource types?
   using TypeProps = mozilla::Variant<mozilla::Nothing,            // primitive,
                                      ComponentRecordFieldVector,  // record
                                      ComponentVariantCaseVector,  // variant
@@ -370,17 +370,17 @@ class ComponentAlias {
 };
 
 struct ComponentCanonOpt {
-  // TODO
+  // TODO(wasm-cm)
 };
 
 using ComponentCanonOptVector =
     mozilla::Vector<ComponentCanonOpt, 0, SystemAllocPolicy>;
 
 struct ComponentLiftedFuncDesc {
-  // TODO: Actually store something useful here. I'm not sure at the moment if
-  // it makes sense to store the raw index, options, and dest type, or to store
-  // some kind of new value here. It will all depend on what instantiation
-  // actually looks like. So not touching it for now.
+  // TODO(wasm-cm): Actually store something useful here. I'm not sure at the
+  // moment if it makes sense to store the raw index, options, and dest type, or
+  // to store some kind of new value here. It will all depend on what
+  // instantiation actually looks like. So not touching it for now.
 };
 
 struct CoreInstanceInstantiateArg {
@@ -416,7 +416,8 @@ struct CoreInstanceDescFromModule {
 // creating an anonymous module simplifies our implementation. Note that the
 // module does not live in the component's core module index space.
 //
-// TODO: Fill this out and figure out how to satisfy the module's imports.
+// TODO(wasm-cm): Fill this out and figure out how to satisfy the module's
+// imports.
 struct CoreInstanceDescFromInlineExports {
   SharedModule mod;
 };
@@ -527,7 +528,8 @@ class Component : public JS::WasmComponent {
   ImportVector imports;
   ExportVector exports;
 
-  AliasVector coreFuncs;  // TODO: This will have to accommodate lowered funcs
+  AliasVector
+      coreFuncs;  // TODO(wasm-cm): This will have to accommodate lowered funcs
   AliasVector coreTables;
   AliasVector coreMemories;
   AliasVector coreGlobals;

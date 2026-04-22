@@ -4754,7 +4754,7 @@ bool wasm::DecodeCoreInstance(Decoder& d, MutableComponent& c) {
       if (!d.readVarU32(&numArgs)) {
         return d.fail("expected number of instantiate arguments");
       }
-      // TODO: Implementation limit for instantiate args?
+      // TODO(wasm-cm): Implementation limit for instantiate args?
 
       CoreInstanceInstantiateArgVector args;
       if (!args.reserve(numArgs)) {
@@ -4766,7 +4766,8 @@ bool wasm::DecodeCoreInstance(Decoder& d, MutableComponent& c) {
         if (!DecodeName(d, &importName)) {
           return d.fail("expected import name");
         }
-        // TODO: Validate that the name corresponds to an import on the module
+        // TODO(wasm-cm): Validate that the name corresponds to an import on the
+        // module
 
         uint8_t instanceIndicator;
         if (!d.readFixedU8(&instanceIndicator) || instanceIndicator != 0x12) {
@@ -4781,8 +4782,8 @@ bool wasm::DecodeCoreInstance(Decoder& d, MutableComponent& c) {
           return d.failf("invalid core instance index %d", instanceIndex);
         }
 
-        // TODO: Validate that the instance's exports satisfy the module's
-        // imports
+        // TODO(wasm-cm): Validate that the instance's exports satisfy the
+        // module's imports
 
         args.infallibleAppend((CoreInstanceInstantiateArg){
             .name = std::move(importName),
@@ -5454,7 +5455,8 @@ bool wasm::DecodeComponentAlias(Decoder& d, MutableComponent& c) {
 
   switch (targetType) {
     case 0x00: {  // export i:<instanceidx> n:<name>
-      return d.fail("TODO: component export aliases are not yet supported");
+      // TODO(wasm-cm)
+      return d.fail("component export aliases are not yet supported");
     } break;
     case 0x01: {  // core export i:<core:instanceidx> n:<core:name>
       uint32_t instanceIdx;
@@ -5537,7 +5539,8 @@ bool wasm::DecodeComponentAlias(Decoder& d, MutableComponent& c) {
       }
     } break;
     case 0x02: {  // outer ct:<u32> idx:<u32>
-      return d.fail("TODO: outer aliases are not yet supported");
+      // TODO(wasm-cm)
+      return d.fail("outer aliases are not yet supported");
     } break;
     default:
       return d.failf("unexpected alias target 0x%02x", targetType);
@@ -5559,7 +5562,7 @@ static bool DecodeCanonOpts(Decoder& d, ComponentCanonOptVector* opts) {
     }
 
     switch (kind) {
-      // TODO: Actually parse canonopts
+      // TODO(wasm-cm): Actually parse canonopts
       default:
         return d.failf("unexpected canonopt kind 0x%02x", kind);
     }
@@ -5618,13 +5621,14 @@ bool wasm::DecodeComponentCanonDef(Decoder& d, MutableComponent& c) {
             "could not lift core func (component func type did not match)");
       }
 
-      // TODO: Construct something useful here.
+      // TODO(wasm-cm): Construct something useful here.
       if (!c->funcs.emplaceBack()) {
         return false;
       }
     } break;
     case 0x01: {  // canon lower <funcidx> <opts>
-      return d.fail("TODO: canon lower is not supported yet");
+      // TODO(wasm-cm)
+      return d.fail("canon lower is not supported yet");
     } break;
     default:
       return d.failf("unexpected canonical definition kind 0x%02x", kind);
@@ -5792,8 +5796,8 @@ bool wasm::Validate(JSContext* cx, const BytecodeSource& bytecode,
     return false;
   }
   if (isComponent) {
-    envDecoder.fail(
-        "TODO: standalone validation of components is not supported");
+    // TODO(wasm-cm)
+    envDecoder.fail("standalone validation of components is not supported");
     return false;
   }
 

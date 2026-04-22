@@ -381,8 +381,8 @@ JSObject* Component::createObject(JSContext* cx) const {
     return nullptr;
   }
 
-  // TODO: Is this all applicable to components? If so, can we unify it with
-  // modules?
+  // TODO(wasm-cm): Is this all applicable to components? If so, can we unify it
+  // with modules?
   JS::RootedVector<JSString*> parameterStrings(cx);
   JS::RootedVector<Value> parameterArgs(cx);
   bool canCompileStrings = false;

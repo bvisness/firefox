@@ -1072,8 +1072,8 @@ static SharedComponent CompileComponent(
         } break;
 
         case 1: {  // core:module
-          // TODO: Implementation limit on number of core modules (before
-          // parsing)
+          // TODO(wasm-cm): Implementation limit on number of core modules
+          // (before parsing)
 
           bool unused_;
           if (!DecodePreamble(d, true, false, &unused_)) {
@@ -1095,7 +1095,7 @@ static SharedComponent CompileComponent(
             return nullptr;
           }
 
-          // TODO: Implementation limit on number of instances
+          // TODO(wasm-cm): Implementation limit on number of instances
 
           for (uint32_t i = 0; i < numInstances; i++) {
             if (!DecodeCoreInstance(d, c)) {
@@ -1110,7 +1110,7 @@ static SharedComponent CompileComponent(
             return nullptr;
           }
 
-          // TODO: Implementation limit on number of aliases...?
+          // TODO(wasm-cm): Implementation limit on number of aliases...?
 
           for (uint32_t i = 0; i < numAliases; i++) {
             if (!DecodeComponentAlias(d, c)) {
@@ -1125,7 +1125,7 @@ static SharedComponent CompileComponent(
             return nullptr;
           }
 
-          // TODO: Implementation limit on number of types
+          // TODO(wasm-cm): Implementation limit on number of types
 
           for (uint32_t i = 0; i < numTypes; i++) {
             if (!DecodeComponentType(d, c)) {
@@ -1140,7 +1140,8 @@ static SharedComponent CompileComponent(
             return nullptr;
           }
 
-          // TODO: Implementation limit on number of canonical definitions?
+          // TODO(wasm-cm): Implementation limit on number of canonical
+          // definitions?
 
           for (uint32_t i = 0; i < numCanonDefs; i++) {
             if (!DecodeComponentCanonDef(d, c)) {
@@ -1154,7 +1155,7 @@ static SharedComponent CompileComponent(
             d.fail("expected number of imports");
             return nullptr;
           }
-          // TODO: Implementation limit on number of imports?
+          // TODO(wasm-cm): Implementation limit on number of imports?
 
           for (uint32_t i = 0; i < numImports; i++) {
             if (!DecodeComponentImport(d, c)) {
@@ -1168,7 +1169,7 @@ static SharedComponent CompileComponent(
             d.fail("expected number of exports");
             return nullptr;
           }
-          // TODO: Implementation limit on number of exports
+          // TODO(wasm-cm): Implementation limit on number of exports
 
           for (uint32_t i = 0; i < numExports; i++) {
             if (!DecodeComponentExport(d, c)) {
@@ -1208,7 +1209,8 @@ SharedModuleOrComponent wasm::CompileBuffer(
   }
 
   if (isComponent) {
-    envDecoder.fail("TODO: Components are not supported yet");
+    // TODO(wasm-cm)
+    envDecoder.fail("components are not supported yet");
     return SharedModuleOrComponent(false);
   }
 
@@ -1386,7 +1388,8 @@ SharedModule wasm::CompileStreaming(
       return nullptr;
     }
     if (isComponent) {
-      d.fail("TODO: streaming compilation of components is not supported");
+      // TODO(wasm-cm)
+      d.fail("streaming compilation of components is not supported yet");
       return nullptr;
     }
 
