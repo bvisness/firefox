@@ -1,13 +1,13 @@
 // Helper: builds a component that defines a component func type, provides a
 // core module with a core function of the given core signature, aliases and
 // lifts it.
-function componentWithLift(componentFuncType, flattened) {
-  const params = flattened.length > 0 ? `(param ${flattened.join(" ")})` : "";
-  const results = flattened.length > 0 ? `(result ${flattened.join(" ")})` : "";
+function componentWithLift(componentFuncType, coreParams, coreResults) {
+  const params = coreParams.length > 0 ? `(param ${coreParams.join(" ")})` : "";
+  const results = coreResults.length > 0 ? `(result ${coreResults.join(" ")})` : "";
 
   // Build a core function body that returns values for all the results.
   let body = "";
-  for (const r of flattened) {
+  for (const r of coreResults) {
     body += `${r}.const 0\n`;
   }
 
@@ -33,14 +33,14 @@ function componentWithLift(componentFuncType, flattened) {
 // bool -> i32
 new WebAssembly.Component(componentWithLift(
   `(func (param "a" bool) (result bool))`,
-  ["i32"],
+  ["i32"], ["i32"],
 ));
 
 // s8, s16, s32 -> i32
 for (const t of ["s8", "s16", "s32"]) {
   new WebAssembly.Component(componentWithLift(
     `(func (param "a" ${t}) (result ${t}))`,
-    ["i32"],
+    ["i32"], ["i32"],
   ));
 }
 
@@ -48,7 +48,7 @@ for (const t of ["s8", "s16", "s32"]) {
 for (const t of ["u8", "u16", "u32"]) {
   new WebAssembly.Component(componentWithLift(
     `(func (param "a" ${t}) (result ${t}))`,
-    ["i32"],
+    ["i32"], ["i32"],
   ));
 }
 
@@ -56,32 +56,32 @@ for (const t of ["u8", "u16", "u32"]) {
 for (const t of ["s64", "u64"]) {
   new WebAssembly.Component(componentWithLift(
     `(func (param "a" ${t}) (result ${t}))`,
-    ["i64"],
+    ["i64"], ["i64"],
   ));
 }
 
 // f32 -> f32
 new WebAssembly.Component(componentWithLift(
   `(func (param "a" f32) (result f32))`,
-  ["f32"],
+  ["f32"], ["f32"],
 ));
 
 // f64 -> f64
 new WebAssembly.Component(componentWithLift(
   `(func (param "a" f64) (result f64))`,
-  ["f64"],
+  ["f64"], ["f64"],
 ));
 
 // char -> i32
 new WebAssembly.Component(componentWithLift(
   `(func (param "a" char) (result char))`,
-  ["i32"],
+  ["i32"], ["i32"],
 ));
 
 // string -> (i32, i32) for pointer + length
 new WebAssembly.Component(componentWithLift(
   `(func (param "a" string) (result string))`,
-  ["i32", "i32"]
+  ["i32", "i32"], ["i32", "i32"],
 ));
 
 // ----------------------------------------------------------------------------
@@ -520,7 +520,8 @@ assertErrorMessage(() => new WebAssembly.Component(componentWithLift(
   ["i32"], ["i32"]
 )), WebAssembly.CompileError, /could not lift core func/);
 
-// ---- Canon lift: type validation ----
+// ----------------------------------------------------------------------------
+// Canon lift: type validation
 
 // Lift with non-func type (record).
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
@@ -546,10 +547,10 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 )
 `)), WebAssembly.CompileError, /invalid core function index/);
 
-// ---- Canon lift: complex signatures ----
+// ----------------------------------------------------------------------------
+// Canon lift: complex signatures
 
 // Mixed param types: string + u32 -> bool
-// string flattens to (i32, i32), u32 to i32, bool to i32
 new WebAssembly.Component(componentWithLift(
   `(func (param "a" string) (param "b" u32) (result bool))`,
   ["i32", "i32", "i32"], ["i32"]
@@ -578,7 +579,8 @@ new WebAssembly.Component(componentWithLift(
   [], []
 ));
 
-// ---- Canon lower ----
+// ----------------------------------------------------------------------------
+// Canon lower
 // TODO(wasm-cm): Canon lower not yet implemented.
 
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
