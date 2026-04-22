@@ -1,34 +1,22 @@
 // Helper: builds a component that defines a component func type, provides a
 // core module with a core function of the given core signature, aliases and
 // lifts it.
-function componentWithLift(componentFuncType, coreParams, coreResults) {
-  const coreParamStr = coreParams.map(t => `${t}`).join(" ");
-  const coreResultStr = coreResults.map(t => `${t}`).join(" ");
+function componentWithLift(componentFuncType, flattened) {
+  const params = flattened.length > 0 ? `(param ${flattened.join(" ")})` : "";
+  const results = flattened.length > 0 ? `(result ${flattened.join(" ")})` : "";
 
-  // Build a core function body that returns appropriate defaults.
+  // Build a core function body that returns values for all the results.
   let body = "";
-  for (const r of coreResults) {
-    switch (r) {
-      case "i32": body += "(i32.const 0) "; break;
-      case "i64": body += "(i64.const 0) "; break;
-      case "f32": body += "(f32.const 0) "; break;
-      case "f64": body += "(f64.const 0) "; break;
-    }
+  for (const r of flattened) {
+    body += `${r}.const 0\n`;
   }
-
-  let paramSection = coreParams.length > 0
-    ? `(param ${coreParamStr})`
-    : "";
-  let resultSection = coreResults.length > 0
-    ? `(result ${coreResultStr})`
-    : "";
 
   return wasmTextToBinary(`
     (component
       (type ${componentFuncType})
 
       (core module
-        (func (export "f") ${paramSection} ${resultSection}
+        (func (export "f") ${params} ${results}
           ${body}
         )
       )
@@ -39,19 +27,20 @@ function componentWithLift(componentFuncType, coreParams, coreResults) {
   `);
 }
 
-// ---- Canon lift: primitive types ----
+// ----------------------------------------------------------------------------
+// Canon lift: primitive types
 
 // bool -> i32
 new WebAssembly.Component(componentWithLift(
   `(func (param "a" bool) (result bool))`,
-  ["i32"], ["i32"]
+  ["i32"],
 ));
 
 // s8, s16, s32 -> i32
 for (const t of ["s8", "s16", "s32"]) {
   new WebAssembly.Component(componentWithLift(
     `(func (param "a" ${t}) (result ${t}))`,
-    ["i32"], ["i32"]
+    ["i32"],
   ));
 }
 
@@ -59,7 +48,7 @@ for (const t of ["s8", "s16", "s32"]) {
 for (const t of ["u8", "u16", "u32"]) {
   new WebAssembly.Component(componentWithLift(
     `(func (param "a" ${t}) (result ${t}))`,
-    ["i32"], ["i32"]
+    ["i32"],
   ));
 }
 
@@ -67,35 +56,36 @@ for (const t of ["u8", "u16", "u32"]) {
 for (const t of ["s64", "u64"]) {
   new WebAssembly.Component(componentWithLift(
     `(func (param "a" ${t}) (result ${t}))`,
-    ["i64"], ["i64"]
+    ["i64"],
   ));
 }
 
 // f32 -> f32
 new WebAssembly.Component(componentWithLift(
   `(func (param "a" f32) (result f32))`,
-  ["f32"], ["f32"]
+  ["f32"],
 ));
 
 // f64 -> f64
 new WebAssembly.Component(componentWithLift(
   `(func (param "a" f64) (result f64))`,
-  ["f64"], ["f64"]
+  ["f64"],
 ));
 
 // char -> i32
 new WebAssembly.Component(componentWithLift(
   `(func (param "a" char) (result char))`,
-  ["i32"], ["i32"]
+  ["i32"],
 ));
 
 // string -> (i32, i32) for pointer + length
 new WebAssembly.Component(componentWithLift(
   `(func (param "a" string) (result string))`,
-  ["i32", "i32"], ["i32", "i32"]
+  ["i32", "i32"]
 ));
 
-// ---- Canon lift: compound types ----
+// ----------------------------------------------------------------------------
+// Canon lift: compound types
 
 // Record: fields flatten to their individual core types.
 new WebAssembly.Component(wasmTextToBinary(`
@@ -133,7 +123,6 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // Tuple: elements flatten like record fields.
-// TODO(wasm-cm): Currently fails at type parsing, not flattening.
 new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (tuple u32 f64 u32))
@@ -151,7 +140,6 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // List: flattens to (i32, i32) for pointer + length.
-// TODO(wasm-cm): Currently fails at type parsing, not flattening.
 new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (list u32))
@@ -169,7 +157,6 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // Flags: flattens to i32.
-// TODO(wasm-cm): Currently fails at type parsing, not flattening.
 new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (flags "read" "write" "execute"))
@@ -186,9 +173,11 @@ new WebAssembly.Component(wasmTextToBinary(`
 )
 `));
 
-// Enum: flattens to i32 (discriminant).
-// TODO(wasm-cm): Currently fails at type parsing. Once type parsing is
-// implemented, will hit MOZ_CRASH("TODO") in FlattenType.
+// Enum: flattens to i32 (discriminant). (Note that this is a funny case in the
+// spec: it is semantically equivalent to a variant with a set of empty cases,
+// and flattens as such, which means we have to be picky about the discriminant
+// type, except we don't because all possible discriminant types (u8, u16, u32)
+// flatten to i32 anyway.)
 new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (enum "red" "green" "blue"))
@@ -205,28 +194,211 @@ new WebAssembly.Component(wasmTextToBinary(`
 )
 `));
 
-// Variant: flattens to discriminant + payload.
-// TODO(wasm-cm): Currently fails at type parsing. Once type parsing is
-// implemented, will hit MOZ_CRASH("TODO") in FlattenType.
-new WebAssembly.Component(wasmTextToBinary(`
-(component
-  (type (variant (case "none") (case "some" u32)))
-  (type (func (param "v" 0) (result 0)))
+// Variant: flattens to the discriminant (always i32) followed by the pairwise
+// positional join of every case's flattened payload:
+//
+// join(t, t)                       = t
+// join(i32, f32) = join(f32, i32)  = i32
+// anything else heterogeneous      = i64
 
-  (core module
-    (func (export "f") (param i32 i32) (result i32 i32)
-      (local.get 0) (local.get 1)
+function liftVariant(typeDefs, flattened) {
+  const variantIndex = typeDefs.length - 1;
+  const funcTypeIndex = typeDefs.length;
+  const params = flattened.length > 0 ? `(param ${flattened.join(" ")})` : "";
+  const results = flattened.length > 0 ? `(result ${flattened.join(" ")})` : "";
+  const body = flattened.map(r => `${r}.const 0`).join("\n");
+  return wasmTextToBinary(`
+    (component
+      ${typeDefs.join("\n")}
+      (type (func (param "v" ${variantIndex}) (result ${variantIndex})))
+
+      (core module
+        (func (export "f") ${params} ${results}
+          ${body}
+        )
+      )
+      (core instance (instantiate 0))
+      (alias core export 0 "f" (core func))
+      (func (type ${funcTypeIndex}) (canon lift (core func 0)))
     )
-  )
-  (core instance (instantiate 0))
-  (alias core export 0 "f" (core func))
-  (func (type 1) (canon lift (core func 0)))
-)
-`));
+  `);
+}
+
+// Single case with no payload: just the discriminant.
+new WebAssembly.Component(liftVariant(
+  [`(type (variant (case "only")))`],
+  ["i32"],
+));
+
+// Single case with payload: discriminant + flat(payload).
+new WebAssembly.Component(liftVariant(
+  [`(type (variant (case "only" u64)))`],
+  ["i32", "i64"],
+));
+
+// Multiple cases, all without payload: discriminant only.
+new WebAssembly.Component(liftVariant(
+  [`(type (variant (case "a") (case "b") (case "c")))`],
+  ["i32"],
+));
+
+// Mix of empty and non-empty cases: payload width = longest case.
+new WebAssembly.Component(liftVariant(
+  [`(type (variant (case "none") (case "some" u32)))`],
+  ["i32", "i32"],
+));
+
+// join(i32, i32) = i32
+new WebAssembly.Component(liftVariant(
+  [`(type (variant (case "a" u32) (case "b" u32)))`],
+  ["i32", "i32"],
+));
+
+// join(i32, f32) = i32
+new WebAssembly.Component(liftVariant(
+  [`(type (variant (case "a" u32) (case "b" f32)))`],
+  ["i32", "i32"],
+));
+
+// join(i32, i64) = i64
+new WebAssembly.Component(liftVariant(
+  [`(type (variant (case "a" u32) (case "b" u64)))`],
+  ["i32", "i64"],
+));
+
+// join(i32, f64) = i64
+new WebAssembly.Component(liftVariant(
+  [`(type (variant (case "a" u32) (case "b" f64)))`],
+  ["i32", "i64"],
+));
+
+// join(f32, i32) = i32
+new WebAssembly.Component(liftVariant(
+  [`(type (variant (case "a" f32) (case "b" u32)))`],
+  ["i32", "i32"],
+));
+
+// join(f32, f32) = f32
+new WebAssembly.Component(liftVariant(
+  [`(type (variant (case "a" f32) (case "b" f32)))`],
+  ["i32", "f32"],
+));
+
+// join(f32, i64) = i64
+new WebAssembly.Component(liftVariant(
+  [`(type (variant (case "a" f32) (case "b" u64)))`],
+  ["i32", "i64"],
+));
+
+// join(f32, f64) = i64
+new WebAssembly.Component(liftVariant(
+  [`(type (variant (case "a" f32) (case "b" f64)))`],
+  ["i32", "i64"],
+));
+
+// join(i64, i32) = i64
+new WebAssembly.Component(liftVariant(
+  [`(type (variant (case "a" u64) (case "b" u32)))`],
+  ["i32", "i64"],
+));
+
+// join(i64, f32) = i64
+new WebAssembly.Component(liftVariant(
+  [`(type (variant (case "a" u64) (case "b" f32)))`],
+  ["i32", "i64"],
+));
+
+// join(i64, i64) = i64
+new WebAssembly.Component(liftVariant(
+  [`(type (variant (case "a" u64) (case "b" u64)))`],
+  ["i32", "i64"],
+));
+
+// join(i64, f64) = i64
+new WebAssembly.Component(liftVariant(
+  [`(type (variant (case "a" u64) (case "b" f64)))`],
+  ["i32", "i64"],
+));
+
+// join(f64, i32) = i64
+new WebAssembly.Component(liftVariant(
+  [`(type (variant (case "a" f64) (case "b" u32)))`],
+  ["i32", "i64"],
+));
+
+// join(f64, f32) = i64
+new WebAssembly.Component(liftVariant(
+  [`(type (variant (case "a" f64) (case "b" f32)))`],
+  ["i32", "i64"],
+));
+
+// join(f64, i64) = i64
+new WebAssembly.Component(liftVariant(
+  [`(type (variant (case "a" f64) (case "b" u64)))`],
+  ["i32", "i64"],
+));
+
+// join(f64, f64) = f64
+new WebAssembly.Component(liftVariant(
+  [`(type (variant (case "a" f64) (case "b" f64)))`],
+  ["i32", "f64"],
+));
+
+// Time for a little arithmetic :)
+
+//   (s) i32 i32
+// + (n) i32
+// --------------
+//       i32 i32
+new WebAssembly.Component(liftVariant(
+  [`(type (variant (case "s" string) (case "n" u32)))`],
+  ["i32", "i32", "i32"],
+));
+
+//   (t) i64 i32
+// + (f) f32
+// --------------
+//       i64 i32
+new WebAssembly.Component(liftVariant(
+  [
+    `(type (tuple u64 u32))`,
+    `(type (variant (case "t" 0) (case "f" f32)))`,
+  ],
+  ["i32", "i64", "i32"],
+));
+
+//   (inner)  i32 i32
+// + (single) f64
+// -------------------
+//            i64 i32
+new WebAssembly.Component(liftVariant(
+  [
+    `(type (variant (case "x" u32) (case "y" u32)))`,
+    `(type (variant (case "inner" 0) (case "single" f64)))`,
+  ],
+  ["i32", "i64", "i32"],
+));
+
+//   (a) f32
+//   (b) f32 f32
+//   (c) f32 f32 f64 f32 f64
+//   (d) i32 f32 f64
+// + (e) f32 f32 f64 f64
+// --------------------------
+//       i32 f32 f64 i64 f64
+new WebAssembly.Component(liftVariant(
+  [
+    `(type (tuple f32))`,
+    `(type (tuple f32 f32))`,
+    `(type (tuple f32 f32 f64 f32 f64))`,
+    `(type (tuple u8  f32 f64))`,
+    `(type (tuple f32 f32 f64 f64))`,
+    `(type (variant (case "a" 0) (case "b" 1) (case "c" 2) (case "d" 3) (case "e" 4)))`,
+  ],
+  ["i32", "i32", "f32", "f64", "i64", "f64"],
+));
 
 // Option: flattens to discriminant (i32) + payload.
-// TODO(wasm-cm): Currently fails at type parsing. Once type parsing is
-// implemented, will hit MOZ_CRASH("TODO") in FlattenType.
 new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (option u32))
@@ -244,8 +416,6 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // Result: flattens to discriminant + ok payload + error payload.
-// TODO(wasm-cm): Currently fails at type parsing. Once type parsing is
-// implemented, will hit MOZ_CRASH("TODO") in FlattenType.
 new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (result u32 (error u32)))
@@ -261,6 +431,8 @@ new WebAssembly.Component(wasmTextToBinary(`
   (func (type 1) (canon lift (core func 0)))
 )
 `));
+
+throw "asdfadsf"
 
 // ---- Canon lift: signature mismatch ----
 

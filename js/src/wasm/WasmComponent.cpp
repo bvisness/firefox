@@ -203,6 +203,7 @@ bool wasm::FlattenType(const Component& c, const ComponentValType& t,
     case ComponentTypeKind::S32:
     case ComponentTypeKind::Char:
     case ComponentTypeKind::Flags:
+    case ComponentTypeKind::Enum:
     case ComponentTypeKind::Own:
     case ComponentTypeKind::Borrow: {
       if (!result->append(ValType::i32())) {
@@ -261,8 +262,52 @@ bool wasm::FlattenType(const Component& c, const ComponentValType& t,
         return false;
       }
     } break;
-    case ComponentTypeKind::Variant:
-    case ComponentTypeKind::Enum:
+    case ComponentTypeKind::Variant: {
+      // Flatten the discriminant
+      if (!result->append(ValType::i32())) {
+        return false;
+      }
+
+      // Flatten all the cases (overlapped, with joins)
+      const ComponentVariantCaseVector& cases =
+          c.types[t.asTypeIndex()].asVariant();
+      size_t startIndex = result->length();
+      for (const ComponentVariantCase& case_ : cases) {
+        if (!case_.type) {
+          continue;
+        }
+
+        ValTypeVector caseFlattened;
+        if (!FlattenType(c, *case_.type, &caseFlattened)) {
+          return false;
+        }
+        for (size_t i = 0; i < caseFlattened.length(); i++) {
+          ValType newType = caseFlattened[i];
+          size_t existingIdx = startIndex + i;
+          if (existingIdx < result->length()) {
+            // Join the new type with the existing one.
+            ValType existing = (*result)[existingIdx];
+            ValType joined;
+            if (newType == existing) {
+              joined = existing;
+            } else if ((existing == ValType::i32() &&
+                        newType == ValType::f32()) ||
+                       (existing == ValType::f32() &&
+                        newType == ValType::i32())) {
+              joined = ValType::i32();
+            } else {
+              joined = ValType::i64();
+            }
+            (*result)[existingIdx] = joined;
+          } else {
+            // Append the new type to the overall list.
+            if (!result->append(caseFlattened[i])) {
+              return false;
+            }
+          }
+        }
+      }
+    } break;
     case ComponentTypeKind::Option:
     case ComponentTypeKind::Result: {
       MOZ_CRASH("TODO");

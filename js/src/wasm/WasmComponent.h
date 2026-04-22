@@ -271,6 +271,10 @@ class ComponentDefType {
     MOZ_RELEASE_ASSERT(kind() == ComponentTypeKind::Record);
     return props_.as<ComponentRecordFieldVector>();
   }
+  const ComponentVariantCaseVector& asVariant() const {
+    MOZ_RELEASE_ASSERT(kind() == ComponentTypeKind::Variant);
+    return props_.as<ComponentVariantCaseVector>();
+  }
   const ComponentValTypeVector& asTuple() const {
     MOZ_RELEASE_ASSERT(kind() == ComponentTypeKind::Tuple);
     return props_.as<ComponentValTypeVector>();
