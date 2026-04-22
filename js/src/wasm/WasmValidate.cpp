@@ -5028,7 +5028,9 @@ bool wasm::DecodeCoreInstance(Decoder& d, MutableComponent& c) {
       if (!DecodeComponentWords(d, thing, /*allowUppercase=*/true)) {
         return false;
       }
-      if (!d.readLiteral(".")) {
+      if (d.done()) {
+        return d.failf("%s name ended unexpectedly", thing);
+      } else if (!d.readLiteral(".")) {
         return d.failf("invalid character in %s name", thing);
       }
       if (!DecodeComponentWords(d, thing, /*allowUppercase=*/true)) {

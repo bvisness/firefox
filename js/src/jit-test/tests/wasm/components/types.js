@@ -323,14 +323,14 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
   (type (resource (rep i32)))
   (type (own 0))
 )
-`)), WebAssembly.CompileError, /not yet implemented/);
+`)), WebAssembly.CompileError, /unexpected type/);
 
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (resource (rep i32)))
   (type (borrow 0))
 )
-`)), WebAssembly.CompileError, /not yet implemented/);
+`)), WebAssembly.CompileError, /unexpected type/);
 
 // ----------------------------------------------------------------------------
 // Func types
@@ -473,7 +473,7 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (import "[constructor]foo.bar" (func))
 )
-`)), WebAssembly.CompileError, /not yet implemented/);
+`)), WebAssembly.CompileError, /invalid character/);
 
 // [method] requires <label>.<label>.
 new WebAssembly.Component(wasmTextToBinary(`
@@ -485,7 +485,7 @@ new WebAssembly.Component(wasmTextToBinary(`
 // [method] with multi-word labels on both sides.
 new WebAssembly.Component(wasmTextToBinary(`
 (component
-  (import "[method]my-res.my-meth" (func))
+  (import "[method]my-resource.my-method" (func))
 )
 `));
 
@@ -501,28 +501,28 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (import "[method]foo" (func))
 )
-`)), WebAssembly.CompileError, /not yet implemented/);
+`)), WebAssembly.CompileError, /ended unexpectedly/);
 
 // [method] with empty second label.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (import "[method]foo." (func))
 )
-`)), WebAssembly.CompileError, /not yet implemented/);
+`)), WebAssembly.CompileError, /ended unexpectedly/);
 
 // [method] with empty first label.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (import "[method].bar" (func))
 )
-`)), WebAssembly.CompileError, /not yet implemented/);
+`)), WebAssembly.CompileError, /invalid character/);
 
 // [method] may not contain more than one dot.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (import "[method]foo.bar.baz" (func))
 )
-`)), WebAssembly.CompileError, /not yet implemented/);
+`)), WebAssembly.CompileError, /invalid character/);
 
 // [static] requires <label>.<label>.
 new WebAssembly.Component(wasmTextToBinary(`
@@ -543,35 +543,35 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (import "[static]foo" (func))
 )
-`)), WebAssembly.CompileError, /not yet implemented/);
+`)), WebAssembly.CompileError, /ended unexpectedly/);
 
 // [static] with empty second label.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (import "[static]foo." (func))
 )
-`)), WebAssembly.CompileError, /not yet implemented/);
+`)), WebAssembly.CompileError, /ended unexpectedly/);
 
 // Unrecognized annotations are rejected.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (import "[unknown]foo" (func))
 )
-`)), WebAssembly.CompileError, /not yet implemented/);
+`)), WebAssembly.CompileError, /invalid character/);
 
 // Unclosed annotation bracket is rejected.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (import "[methodfoo.bar" (func))
 )
-`)), WebAssembly.CompileError, /not yet implemented/);
+`)), WebAssembly.CompileError, /invalid character/);
 
 // Invalid label after a valid annotation.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (import "[constructor]0bad" (func))
 )
-`)), WebAssembly.CompileError, /not yet implemented/);
+`)), WebAssembly.CompileError, /invalid character/);
 
 // ----------------------------------------------------------------------------
 // Edge cases
