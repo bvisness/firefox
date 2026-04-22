@@ -323,14 +323,14 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
   (type (resource (rep i32)))
   (type (own 0))
 )
-`)), WebAssembly.CompileError, /./);
+`)), WebAssembly.CompileError, /not yet implemented/);
 
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (resource (rep i32)))
   (type (borrow 0))
 )
-`)), WebAssembly.CompileError, /./);
+`)), WebAssembly.CompileError, /not yet implemented/);
 
 // ----------------------------------------------------------------------------
 // Func types
@@ -447,6 +447,131 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
   (type (record (field "trailing-" u32)))
 )
 `)), WebAssembly.CompileError, /ended unexpectedly/);
+
+// ----------------------------------------------------------------------------
+// Plain name annotations
+//
+// [constructor], [method], and [static] are only valid on function names per
+// the component model spec, so we use function imports as the test vehicle.
+
+// [constructor] accepts a single label.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (import "[constructor]foo" (func))
+)
+`));
+
+// [constructor] with a multi-word label.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (import "[constructor]my-resource" (func))
+)
+`));
+
+// [constructor] does not accept a dotted name.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (import "[constructor]foo.bar" (func))
+)
+`)), WebAssembly.CompileError, /not yet implemented/);
+
+// [method] requires <label>.<label>.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (import "[method]foo.bar" (func))
+)
+`));
+
+// [method] with multi-word labels on both sides.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (import "[method]my-res.my-meth" (func))
+)
+`));
+
+// [method] with acronym in second label.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (import "[method]foo.BAR" (func))
+)
+`));
+
+// [method] without a dot is invalid.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (import "[method]foo" (func))
+)
+`)), WebAssembly.CompileError, /not yet implemented/);
+
+// [method] with empty second label.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (import "[method]foo." (func))
+)
+`)), WebAssembly.CompileError, /not yet implemented/);
+
+// [method] with empty first label.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (import "[method].bar" (func))
+)
+`)), WebAssembly.CompileError, /not yet implemented/);
+
+// [method] may not contain more than one dot.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (import "[method]foo.bar.baz" (func))
+)
+`)), WebAssembly.CompileError, /not yet implemented/);
+
+// [static] requires <label>.<label>.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (import "[static]foo.bar" (func))
+)
+`));
+
+// [static] with multi-word labels.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (import "[static]my-res.my-meth" (func))
+)
+`));
+
+// [static] without a dot is invalid.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (import "[static]foo" (func))
+)
+`)), WebAssembly.CompileError, /not yet implemented/);
+
+// [static] with empty second label.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (import "[static]foo." (func))
+)
+`)), WebAssembly.CompileError, /not yet implemented/);
+
+// Unrecognized annotations are rejected.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (import "[unknown]foo" (func))
+)
+`)), WebAssembly.CompileError, /not yet implemented/);
+
+// Unclosed annotation bracket is rejected.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (import "[methodfoo.bar" (func))
+)
+`)), WebAssembly.CompileError, /not yet implemented/);
+
+// Invalid label after a valid annotation.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (import "[constructor]0bad" (func))
+)
+`)), WebAssembly.CompileError, /not yet implemented/);
 
 // ----------------------------------------------------------------------------
 // Edge cases
