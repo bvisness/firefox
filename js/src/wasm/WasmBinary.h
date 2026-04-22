@@ -425,6 +425,7 @@ class Decoder {
   bool fail(size_t errorOffset, const char* msg);
 
   UniqueChars* error() { return error_; }
+  UniqueCharsVector* warnings() { return warnings_; }
 
   void clearError() {
     if (error_) {
@@ -532,16 +533,21 @@ class Decoder {
 
   // See writeBytes comment.
 
-  [[nodiscard]] bool readBytes(uint32_t numBytes,
+  [[nodiscard]] bool peekBytes(uint32_t numBytes,
                                const uint8_t** bytes = nullptr) {
     if (bytes) {
       *bytes = cur_;
     }
-    if (bytesRemain() < numBytes) {
-      return false;
+    return bytesRemain() >= numBytes;
+  }
+
+  [[nodiscard]] bool readBytes(uint32_t numBytes,
+                               const uint8_t** bytes = nullptr) {
+    bool result = peekBytes(numBytes, bytes);
+    if (result) {
+      cur_ += numBytes;
     }
-    cur_ += numBytes;
-    return true;
+    return result;
   }
 
   [[nodiscard]] bool readBytesSpan(uint32_t numBytes, BytecodeSpan* bytes,
@@ -556,6 +562,23 @@ class Decoder {
       *offset = offset_;
     }
     return true;
+  }
+
+  [[nodiscard]] bool peekLiteral(const char* lit) {
+    size_t nBytes = strlen(lit);
+    const uint8_t* actualBytes;
+    if (!peekBytes(nBytes, &actualBytes)) {
+      return false;
+    }
+    return memcmp(lit, actualBytes, nBytes) == 0;
+  }
+
+  [[nodiscard]] bool readLiteral(const char* lit) {
+    bool match = peekLiteral(lit);
+    if (match) {
+      cur_ += strlen(lit);
+    }
+    return match;
   }
 
   // See "section" description in Encoder.

@@ -69,6 +69,18 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 )
 `)), WebAssembly.CompileError, /not strongly-unique/);
 
+// Valid labels in record fields.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (record
+    (field "x" u32)
+    (field "my-field" u32)
+    (field "a0" u32)
+    (field "get-HTTP-header" u32)
+  ))
+)
+`));
+
 // ----------------------------------------------------------------------------
 // Variant types
 
@@ -106,6 +118,20 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
   (type (variant (case "a" u32) (case "a" u32)))
 )
 `)), WebAssembly.CompileError, /not strongly-unique/);
+
+// Valid labels in variant cases.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (variant (case "ok" u32) (case "not-found") (case "HTTP-error" string)))
+)
+`));
+
+// Invalid label in a variant case.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (variant (case "has space" u32)))
+)
+`)), WebAssembly.CompileError, /invalid character/);
 
 // ----------------------------------------------------------------------------
 // List types
@@ -187,6 +213,20 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 )
 `)), WebAssembly.CompileError, /not strongly-unique/);
 
+// Valid labels in flags.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (flags "can-read" "can-write" "O-APPEND"))
+)
+`));
+
+// Invalid label in flags.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (flags "trailing-"))
+)
+`)), WebAssembly.CompileError, /ended unexpectedly/);
+
 // ----------------------------------------------------------------------------
 // Enum types
 
@@ -210,6 +250,20 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
   (type (enum "red" "red"))
 )
 `)), WebAssembly.CompileError, /not strongly-unique/);
+
+// Valid labels in enums.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (enum "left" "top-right" "BOTTOM-LEFT"))
+)
+`));
+
+// Invalid label in an enum.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (enum "" "ok"))
+)
+`)), WebAssembly.CompileError, /cannot be empty/);
 
 // ----------------------------------------------------------------------------
 // Option types
@@ -335,52 +389,66 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 )
 `)), WebAssembly.CompileError, /not strongly-unique/);
 
+// Valid labels in func params.
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (func (param "my-param" s32) (result s32)))
+)
+`));
+
+// Invalid label in a func param.
+assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (func (param "0starts-with-digit" s32) (result s32)))
+)
+`)), WebAssembly.CompileError, /invalid character/);
+
 // ----------------------------------------------------------------------------
 // Name well-formedness
-// TODO(wasm-cm): Name validation not yet implemented.
 
 // Labels must start with a letter, not a digit.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (record (field "0bad" u32)))
 )
-`)), WebAssembly.CompileError, /./);
+`)), WebAssembly.CompileError, /invalid character/);
 
 // Labels cannot contain underscores.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (record (field "no_underscores" u32)))
 )
-`)), WebAssembly.CompileError, /./);
+`)), WebAssembly.CompileError, /invalid character/);
 
 // Labels cannot contain spaces.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (record (field "no spaces" u32)))
 )
-`)), WebAssembly.CompileError, /./);
+`)), WebAssembly.CompileError, /invalid character/);
 
 // Labels cannot be empty.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (record (field "" u32)))
 )
-`)), WebAssembly.CompileError, /./);
+`)), WebAssembly.CompileError, /cannot be empty/);
 
 // Labels cannot have consecutive hyphens.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (record (field "no--double" u32)))
 )
-`)), WebAssembly.CompileError, /./);
+`)), WebAssembly.CompileError, /invalid character/);
 
 // Labels cannot end with a hyphen.
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 (component
   (type (record (field "trailing-" u32)))
 )
-`)), WebAssembly.CompileError, /./);
+`)), WebAssembly.CompileError, /ended unexpectedly/);
 
+// ----------------------------------------------------------------------------
 // Edge cases
 
 // Forward type reference - should fail.
@@ -402,78 +470,3 @@ new WebAssembly.Component(wasmTextToBinary(`
   (type (func (param "x" 1) (param "y" 2) (result 0)))
 )
 `));
-
-// Valid labels in record fields.
-new WebAssembly.Component(wasmTextToBinary(`
-(component
-  (type (record
-    (field "x" u32)
-    (field "my-field" u32)
-    (field "a0" u32)
-    (field "get-HTTP-header" u32)
-  ))
-)
-`));
-
-// Invalid label in a record field.
-assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
-(component
-  (type (record (field "no_underscores" u32)))
-)
-`)), WebAssembly.CompileError, /./);
-
-// Valid labels in func params.
-new WebAssembly.Component(wasmTextToBinary(`
-(component
-  (type (func (param "my-param" s32) (result s32)))
-)
-`));
-
-// Invalid label in a func param.
-assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
-(component
-  (type (func (param "0starts-with-digit" s32) (result s32)))
-)
-`)), WebAssembly.CompileError, /./);
-
-// Valid labels in variant cases.
-new WebAssembly.Component(wasmTextToBinary(`
-(component
-  (type (variant (case "ok" u32) (case "not-found") (case "HTTP-error" string)))
-)
-`));
-
-// Invalid label in a variant case.
-assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
-(component
-  (type (variant (case "has space" u32)))
-)
-`)), WebAssembly.CompileError, /./);
-
-// Valid labels in flags.
-new WebAssembly.Component(wasmTextToBinary(`
-(component
-  (type (flags "can-read" "can-write" "O-APPEND"))
-)
-`));
-
-// Invalid label in flags.
-assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
-(component
-  (type (flags "trailing-"))
-)
-`)), WebAssembly.CompileError, /./);
-
-// Valid labels in enums.
-new WebAssembly.Component(wasmTextToBinary(`
-(component
-  (type (enum "left" "top-right" "BOTTOM-LEFT"))
-)
-`));
-
-// Invalid label in an enum.
-assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
-(component
-  (type (enum "" "ok"))
-)
-`)), WebAssembly.CompileError, /./);

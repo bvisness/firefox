@@ -170,6 +170,9 @@ using ValidatingOpIter = OpIter<ValidatingPolicy>;
 [[nodiscard]] bool Validate(JSContext* cx, const BytecodeSource& bytecode,
                             const FeatureOptions& options, UniqueChars* error);
 
+[[nodiscard]] bool DecodeUTF8Bytes(Decoder& d, uint32_t numBytes,
+                                   UTF8Bytes* bytes);
+
 [[nodiscard]] bool DecodeCoreInstance(Decoder& d, MutableComponent& c);
 [[nodiscard]] bool DecodeComponentType(Decoder& d, MutableComponent& c);
 [[nodiscard]] bool DecodeComponentAlias(Decoder& d, MutableComponent& c);

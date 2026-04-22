@@ -2881,27 +2881,34 @@ static bool DecodeTypeSection(Decoder& d, CodeMetadata* codeMeta) {
   return d.finishSection(*range, "type");
 }
 
+bool wasm::DecodeUTF8Bytes(Decoder& d, uint32_t numBytes, UTF8Bytes* bytes) {
+  const uint8_t* rawBytes;
+  if (!d.readBytes(numBytes, &rawBytes)) {
+    return false;
+  }
+
+  if (!IsUtf8(AsChars(Span(rawBytes, numBytes)))) {
+    return false;
+  }
+
+  if (!bytes->resizeUninitialized(numBytes)) {
+    return false;
+  }
+  memcpy(bytes->begin(), rawBytes, numBytes);
+
+  return true;
+}
+
 [[nodiscard]] static bool DecodeName(Decoder& d, CacheableName* name) {
   uint32_t numBytes;
   if (!d.readVarU32(&numBytes)) {
     return false;
   }
 
-  const uint8_t* bytes;
-  if (!d.readBytes(numBytes, &bytes)) {
-    return false;
-  }
-
-  if (!IsUtf8(AsChars(Span(bytes, numBytes)))) {
-    return false;
-  }
-
   UTF8Bytes utf8Bytes;
-  if (!utf8Bytes.resizeUninitialized(numBytes)) {
+  if (!DecodeUTF8Bytes(d, numBytes, &utf8Bytes)) {
     return false;
   }
-  memcpy(utf8Bytes.begin(), bytes, numBytes);
-
   *name = CacheableName(std::move(utf8Bytes));
   return true;
 }
@@ -4914,6 +4921,131 @@ bool wasm::DecodeCoreInstance(Decoder& d, MutableComponent& c) {
   return true;
 }
 
+// Decodes the "words" or "label" production in a component model name, which is
+// to say a series-OF-possibly-UPPERCASE-words. (In some cases, uppercase
+// letters are not allowed.)
+[[nodiscard]] bool DecodeComponentWords(Decoder& d, const char* thing,
+                                        bool allowUppercase) {
+  while (true) {
+    uint8_t first;
+    if (!d.readFixedU8(&first)) {
+      return d.failf("%s name ended unexpectedly", thing);
+    }
+    bool firstUppercase = 'A' <= first && first <= 'Z';
+    bool firstLowercase = 'a' <= first && first <= 'z';
+
+    if (!(firstUppercase || firstLowercase)) {
+      return d.failf("invalid character in %s name", thing);
+    }
+    if (firstUppercase && !allowUppercase) {
+      return d.failf("%s name had unexpected uppercase letter", thing);
+    }
+
+    uint8_t b;
+    while (d.peekByte(&b)) {
+      if (b == '-') {
+        break;
+      }
+
+      bool letter =
+          firstUppercase ? ('A' <= b && b <= 'Z') : ('a' <= b && b <= 'z');
+      bool digit = '0' <= b && b <= '9';
+      if (!letter && !digit) {
+        // We are immediately done because we encountered a non-word symbol at
+        // the end of something that could be valid.
+        return true;
+      }
+
+      MOZ_RELEASE_ASSERT(d.readBytes(1));
+    }
+    if (d.done()) {
+      return true;
+    }
+
+    MOZ_RELEASE_ASSERT(d.readLiteral("-"));
+  }
+}
+
+[[nodiscard]] bool DecodeComponentName(Decoder& d, const char* thing,
+                                       CacheableName* name, bool allowMethods) {
+  uint32_t len;
+  if (!d.readVarU32(&len)) {
+    return d.fail("expected name");
+  }
+  if (len == 0) {
+    return d.failf("%s name cannot be empty", thing);
+  }
+
+  Decoder nameDecoder(d.currentPosition(), d.currentPosition() + len,
+                      d.currentOffset(), d.error(), d.warnings());
+  {
+    Decoder& d = nameDecoder;
+
+    // Get some unusual kinds of component names out of the way. In the future
+    // we could choose to support some of these.
+    if (d.peekLiteral("url=")) {
+      return d.fail("URL names are not supported");
+    } else if (d.peekLiteral("integrity=")) {
+      return d.fail("hash names are not supported");
+    } else if (d.peekLiteral("unlocked-dep=") || d.peekLiteral("locked-dep=")) {
+      return d.fail("dependency names are not supported");
+    }
+
+    // Now all we have to deal with are plain names and interface names.
+    // Examples of each would be:
+    //
+    // - Plain names: foo-BAR-baz, [constructor]FOO-BAR, [method]foo.BAR,
+    //   [static]foo-BAR.BEEP-boop
+    // - Interface names: wasi:cli/stdout,
+    //   wasi:clocks/imports@0.3.0-rc-2026-03-15,
+    //   foo-bar:BEEP-boop/boop-BEEP@<[a-zA-Z0-9.+-]+>
+    //
+    // For interface names, all three of namespace (e.g. "wasi:"), name (e.g.
+    // "cli"), and "projection" (e.g. "/stdout") are required, while the
+    // version (e.g. "@0.3.0") is optional.
+    //
+    // We can't distinguish up front between a plain or interface name (unless
+    // there is an annotation like "[constructor]"), so parsing must be ready
+    // to accommodate either.
+    //
+    // TODO(wasm-cm): Today we reject interface names entirely; the parser
+    // does not recognize the symbols used to delimit namespaces, projections,
+    // or versions.
+
+    if (allowMethods && d.readLiteral("[constructor]")) {
+      if (!DecodeComponentWords(d, thing, /*allowUppercase=*/true)) {
+        return false;
+      }
+    } else if (allowMethods &&
+               (d.readLiteral("[method]") || d.readLiteral("[static]"))) {
+      if (!DecodeComponentWords(d, thing, /*allowUppercase=*/true)) {
+        return false;
+      }
+      if (!d.readLiteral(".")) {
+        return d.failf("invalid character in %s name", thing);
+      }
+      if (!DecodeComponentWords(d, thing, /*allowUppercase=*/true)) {
+        return false;
+      }
+    } else {
+      if (!DecodeComponentWords(d, thing, /*allowUppercase=*/true)) {
+        return false;
+      }
+    }
+
+    if (!d.done()) {
+      return d.failf("invalid characters in %s name", thing);
+    }
+  }
+
+  UTF8Bytes fullNameBytes;
+  MOZ_RELEASE_ASSERT(DecodeUTF8Bytes(d, len, &fullNameBytes),
+                     "name should have been already validated as UTF-8");
+  *name = CacheableName(std::move(fullNameBytes));
+
+  return true;
+}
+
 static mozilla::Maybe<ComponentValType> DecodeComponentValType(
     Decoder& d, MutableComponent& c) {
   // Types in the binary are organized so that negative numbers are
@@ -4921,6 +5053,7 @@ static mozilla::Maybe<ComponentValType> DecodeComponentValType(
   uint8_t typeFirstByte;
   int32_t type;
   if (!d.peekByte(&typeFirstByte) || !d.readVarS32(&type)) {
+    MOZ_CRASH();
     d.fail("expected value type");
     return mozilla::Nothing();
   }
@@ -4985,8 +5118,9 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
 
       for (uint32_t i = 0; i < numFields; i++) {
         CacheableName name;
-        if (!DecodeName(d, &name)) {
-          return d.fail("expected record field name");
+        if (!DecodeComponentName(d, "record field", &name,
+                                 /*allowMethods=*/false)) {
+          return false;
         }
         mozilla::Maybe<ComponentValType> type = DecodeComponentValType(d, c);
         if (type.isNothing()) {
@@ -5028,8 +5162,9 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
 
       for (uint32_t i = 0; i < numCases; i++) {
         CacheableName name;
-        if (!DecodeName(d, &name)) {
-          return d.fail("expected variant case name");
+        if (!DecodeComponentName(d, "variant case", &name,
+                                 /*allowMethods=*/false)) {
+          return false;
         }
 
         mozilla::Maybe<ComponentValType> type;
@@ -5120,10 +5255,10 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
         return false;
       }
       for (uint32_t i = 0; i < numLabels; i++) {
-        // TODO(wasm-cm): Parse component names
         CacheableName name;
-        if (!DecodeName(d, &name)) {
-          return d.fail("expected flag label");
+        if (!DecodeComponentName(d, "flag label", &name,
+                                 /*allowMethods=*/false)) {
+          return false;
         }
         bool duplicate;
         if (!labelDedup.add(name.utf8Bytes(), &duplicate)) {
@@ -5158,10 +5293,10 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
         return false;
       }
       for (uint32_t i = 0; i < numCases; i++) {
-        // TODO(wasm-cm): Parse component names
         CacheableName name;
-        if (!DecodeName(d, &name)) {
-          return d.fail("expected enum case label");
+        if (!DecodeComponentName(d, "enum case", &name,
+                                 /*allowMethods=*/false)) {
+          return false;
         }
         bool duplicate;
         if (!caseLabelDedup.add(name.utf8Bytes(), &duplicate)) {
@@ -5239,8 +5374,8 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
 
       for (uint32_t i = 0; i < numParams; i++) {
         CacheableName name;
-        if (!DecodeName(d, &name)) {
-          return d.fail("expected param name");
+        if (!DecodeComponentName(d, "param", &name, /*allowMethods=*/false)) {
+          return false;
         }
         mozilla::Maybe<ComponentValType> type = DecodeComponentValType(d, c);
         if (type.isNothing()) {
@@ -5499,8 +5634,8 @@ bool wasm::DecodeComponentExport(Decoder& d, MutableComponent& c) {
   }
 
   CacheableName exportName;
-  if (!DecodeName(d, &exportName)) {
-    return d.fail("expected export name");
+  if (!DecodeComponentName(d, "export", &exportName, /*allowMethods=*/false)) {
+    return false;
   }
   bool duplicate;
   if (!c->exportNameDedup.add(exportName.utf8Bytes(), &duplicate)) {
@@ -5510,8 +5645,6 @@ bool wasm::DecodeComponentExport(Decoder& d, MutableComponent& c) {
     return d.failf("export name \"%.*s\" is not strongly-unique",
                    CacheableName_Printf(exportName));
   }
-  // TODO: Validate that the name is well-formed (perhaps this should be lifted
-  // to a utility like DecodeComponentName)
 
   CacheableName versionSuffix;
   if (exportFlags == 0x01) {
@@ -5575,8 +5708,9 @@ bool wasm::DecodeComponentExport(Decoder& d, MutableComponent& c) {
     // TODO: Validate that the exported thing matches the explicit externdesc
   }
 
-  // TODO: Validate that all resource types used (transitively!) in the exported
-  // thing's type came from a preceding import or were previously exported.
+  // TODO: Validate that all resource types used (transitively!) in the
+  // exported thing's type came from a preceding import or were previously
+  // exported.
 
   // TODO: Validate all the naming-related conditions
 
@@ -5627,8 +5761,9 @@ bool wasm::Validate(JSContext* cx, const BytecodeSource& bytecode,
   }
 
   if (bytecode.hasCodeSection()) {
-    // DecodeModuleEnvironment will stop and return true if there is an unknown
-    // section before the code section. We must check this and return an error.
+    // DecodeModuleEnvironment will stop and return true if there is an
+    // unknown section before the code section. We must check this and return
+    // an error.
     if (!moduleMeta->codeMeta->codeSectionRange) {
       envDecoder.fail("unknown section before code section");
       return false;

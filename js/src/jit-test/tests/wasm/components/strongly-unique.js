@@ -1,18 +1,15 @@
-// We use record fields as our oracle for strongly-uniqueness.
+// We use imported functions as our oracle for strongly-uniqueness, as only
+// functions allow the full range of plain names.
 function assertAllStronglyUnique(names) {
   new WebAssembly.Component(wasmTextToBinary(`(component
-    (type (record
-      ${names.map(n => `(field "${n}" bool)`).join("\n")}
-    ))
+    ${names.map(n => `(import "${n}" (func))`).join("\n")}
   )`));
 }
 function assertNotStronglyUnique(okNames, badName) {
   assertAllStronglyUnique(okNames);
   assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`(component
-    (type (record
-      ${okNames.map(n => `(field "${n}" bool)`).join("\n")}
-      (field "${badName}" bool)
-    ))
+    ${okNames.map(n => `(import "${n}" (func))`).join("\n")}
+    (import "${badName}" (func))
   )`)), WebAssembly.CompileError, /not strongly-unique/);
 }
 
