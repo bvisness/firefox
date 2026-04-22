@@ -279,6 +279,14 @@ class ComponentDefType {
     MOZ_RELEASE_ASSERT(kind() == ComponentTypeKind::Tuple);
     return props_.as<ComponentValTypeVector>();
   }
+  ComponentValType asOption() const {
+    MOZ_RELEASE_ASSERT(kind() == ComponentTypeKind::Option);
+    return props_.as<ComponentValType>();
+  }
+  ComponentResultType asResult() const {
+    MOZ_RELEASE_ASSERT(kind() == ComponentTypeKind::Result);
+    return props_.as<ComponentResultType>();
+  }
   const ComponentFuncType& asFunc() const {
     MOZ_RELEASE_ASSERT(kind() == ComponentTypeKind::Func);
     return props_.as<ComponentFuncType>();

@@ -401,11 +401,11 @@ new WebAssembly.Component(liftVariant(
 // Option: flattens to discriminant (i32) + payload.
 new WebAssembly.Component(wasmTextToBinary(`
 (component
-  (type (option u32))
+  (type (option f32))
   (type (func (param "v" 0) (result 0)))
 
   (core module
-    (func (export "f") (param i32 i32) (result i32 i32)
+    (func (export "f") (param i32 f32) (result i32 f32)
       (local.get 0) (local.get 1)
     )
   )
@@ -416,13 +416,30 @@ new WebAssembly.Component(wasmTextToBinary(`
 `));
 
 // Result: flattens to discriminant + ok payload + error payload.
+// This uses the same encoding as a variant.
 new WebAssembly.Component(wasmTextToBinary(`
 (component
-  (type (result u32 (error u32)))
+  (type (result))
   (type (func (param "v" 0) (result 0)))
 
   (core module
-    (func (export "f") (param i32 i32) (result i32 i32)
+    (func (export "f") (param i32) (result i32)
+      (local.get 0)
+    )
+  )
+  (core instance (instantiate 0))
+  (alias core export 0 "f" (core func))
+  (func (type 1) (canon lift (core func 0)))
+)
+`));
+
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (result f32))
+  (type (func (param "v" 0) (result 0)))
+
+  (core module
+    (func (export "f") (param i32 f32) (result i32 f32)
       (local.get 0) (local.get 1)
     )
   )
@@ -432,9 +449,40 @@ new WebAssembly.Component(wasmTextToBinary(`
 )
 `));
 
-throw "asdfadsf"
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (result (error f32)))
+  (type (func (param "v" 0) (result 0)))
 
-// ---- Canon lift: signature mismatch ----
+  (core module
+    (func (export "f") (param i32 f32) (result i32 f32)
+      (local.get 0) (local.get 1)
+    )
+  )
+  (core instance (instantiate 0))
+  (alias core export 0 "f" (core func))
+  (func (type 1) (canon lift (core func 0)))
+)
+`));
+
+new WebAssembly.Component(wasmTextToBinary(`
+(component
+  (type (result f32 (error f64)))
+  (type (func (param "v" 0) (result 0)))
+
+  (core module
+    (func (export "f") (param i32 i64) (result i32 i64)
+      (local.get 0) (local.get 1)
+    )
+  )
+  (core instance (instantiate 0))
+  (alias core export 0 "f" (core func))
+  (func (type 1) (canon lift (core func 0)))
+)
+`));
+
+// ----------------------------------------------------------------------------
+// Canon lift: signature mismatch
 
 // Too few core params.
 assertErrorMessage(() => new WebAssembly.Component(componentWithLift(

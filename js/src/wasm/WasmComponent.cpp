@@ -181,6 +181,17 @@ bool wasm::FlattenTypes(const Component& c, const ComponentValTypeVector& ts,
   return true;
 }
 
+static ValType JoinVariantValType(ValType a, ValType b) {
+  if (a == b) {
+    return a;
+  } else if ((a == ValType::i32() && b == ValType::f32()) ||
+             (a == ValType::f32() && b == ValType::i32())) {
+    return ValType::i32();
+  } else {
+    return ValType::i64();
+  }
+}
+
 bool wasm::FlattenType(const Component& c, const ComponentValType& t,
                        ValTypeVector* result) {
   ComponentTypeKind kind;
@@ -282,23 +293,11 @@ bool wasm::FlattenType(const Component& c, const ComponentValType& t,
           return false;
         }
         for (size_t i = 0; i < caseFlattened.length(); i++) {
-          ValType newType = caseFlattened[i];
           size_t existingIdx = startIndex + i;
           if (existingIdx < result->length()) {
             // Join the new type with the existing one.
-            ValType existing = (*result)[existingIdx];
-            ValType joined;
-            if (newType == existing) {
-              joined = existing;
-            } else if ((existing == ValType::i32() &&
-                        newType == ValType::f32()) ||
-                       (existing == ValType::f32() &&
-                        newType == ValType::i32())) {
-              joined = ValType::i32();
-            } else {
-              joined = ValType::i64();
-            }
-            (*result)[existingIdx] = joined;
+            (*result)[existingIdx] =
+                JoinVariantValType((*result)[existingIdx], caseFlattened[i]);
           } else {
             // Append the new type to the overall list.
             if (!result->append(caseFlattened[i])) {
@@ -308,9 +307,49 @@ bool wasm::FlattenType(const Component& c, const ComponentValType& t,
         }
       }
     } break;
-    case ComponentTypeKind::Option:
+    case ComponentTypeKind::Option: {
+      ComponentValType inner = c.types[t.asTypeIndex()].asOption();
+      if (!result->append(ValType::i32())) {
+        return false;
+      }
+      if (!FlattenType(c, inner, result)) {
+        return false;
+      }
+    } break;
     case ComponentTypeKind::Result: {
-      MOZ_CRASH("TODO");
+      ComponentResultType inner = c.types[t.asTypeIndex()].asResult();
+      // Result types are encoded just like a variant with two cases, but each
+      // case may or may not have a type.
+
+      // Discriminant
+      if (!result->append(ValType::i32())) {
+        return false;
+      }
+
+      // Payload(s)
+      size_t startIndex = result->length();
+      if (inner.type.isSome()) {
+        if (!FlattenType(c, *inner.type, result)) {
+          return false;
+        }
+      }
+      if (inner.errorType.isSome()) {
+        ValTypeVector errorFlattened;
+        if (!FlattenType(c, *inner.errorType, &errorFlattened)) {
+          return false;
+        }
+        for (size_t i = 0; i < errorFlattened.length(); i++) {
+          size_t existingIdx = startIndex + i;
+          if (existingIdx < result->length()) {
+            (*result)[existingIdx] =
+                JoinVariantValType((*result)[existingIdx], errorFlattened[i]);
+          } else {
+            if (!result->append(errorFlattened[i])) {
+              return false;
+            }
+          }
+        }
+      }
     } break;
 
     case ComponentTypeKind::Component:
