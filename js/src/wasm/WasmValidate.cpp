@@ -4777,8 +4777,9 @@ bool wasm::DecodeCoreInstance(Decoder& d, MutableComponent& c) {
         if (!d.readVarU32(&instanceIndex)) {
           return d.fail("expected core instance index");
         }
-
-        // TODO: Validate that the instance index is valid
+        if (c->coreInstances.length() <= instanceIndex) {
+          return d.failf("invalid core instance index %d", instanceIndex);
+        }
 
         // TODO: Validate that the instance's exports satisfy the module's
         // imports
@@ -4798,14 +4799,14 @@ bool wasm::DecodeCoreInstance(Decoder& d, MutableComponent& c) {
       }
     } break;
     case 0x01: {  // inline exports
-      // TODO: Core instances generated from inline exports are basically just a
-      // way of renaming exports to satisfy another component's imports. But
-      // even so, a reasonable first way to implement this would be to literally
-      // construct a new module with imports and exports, then instantiate that.
-      // (Note that this new module wouldn't take up space in the core module
-      // index space; we would have to track ownership a different way.)
-      return d.fail(
-          "TODO: core instances from inline exports are not yet supported");
+      // TODO(wasm-cm): Core instances generated from inline exports are
+      // basically just a way of renaming exports to satisfy another component's
+      // imports. But even so, a reasonable first way to implement this would be
+      // to literally construct a new module with imports and exports, then
+      // instantiate that. (Note that this new module wouldn't take up space in
+      // the core module index space; we would have to track ownership a
+      // different way.)
+      return d.fail("core instances from inline exports are not yet supported");
     } break;
     default:
       return d.failf("expected type of instance expression but got %d",
