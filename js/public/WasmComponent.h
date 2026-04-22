@@ -17,7 +17,8 @@
 namespace JS {
 
 /**
- * TODO: Comment
+ * TODO(wasm-cm): Leave a descriptive comment here :)
+ * For comparison, see WasmModule.h.
  */
 
 struct WasmComponent : js::AtomicRefCounted<WasmComponent> {

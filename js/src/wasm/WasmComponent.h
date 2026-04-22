@@ -553,6 +553,27 @@ class Component : public JS::WasmComponent {
         },
         [](CoreInstanceDescFromInlineExports& desc) { return desc.mod; });
   }
+
+  size_t gcMallocBytesExcludingCode() const {
+    // TODO(wasm-cm): Right now, this only sums up the sizes of the inner
+    // modules, but this is not an accurate picture of a component's memory
+    // footprint.
+    size_t total = 0;
+    for (SharedModule module : coreModules) {
+      total += module->gcMallocBytesExcludingCode();
+    }
+    return total;
+  }
+
+  size_t tier1CodeMemoryUsed() const {
+    // TODO(wasm-cm): As above, this only sums up the memory for core modules,
+    // and does not account for other potential code memory.
+    size_t total = 0;
+    for (SharedModule module : coreModules) {
+      total += module->tier1CodeMemoryUsed();
+    }
+    return total;
+  }
 };
 
 using MutableComponent = RefPtr<Component>;

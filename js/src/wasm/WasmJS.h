@@ -129,7 +129,8 @@ class WasmModuleObject : public NativeObject {
 };
 
 // The class of WebAssembly.Component.
-// TODO: comment
+// TODO(wasm-cm): Leave a more descriptive comment. See WasmModuleObject for
+// comparison.
 
 class WasmComponentObject : public NativeObject {
   static const unsigned COMPONENT_SLOT = 0;

@@ -439,7 +439,7 @@ bool wasm::Eval(JSContext* cx, Handle<TypedArrayObject*> code,
                         code->byteLength().valueOr(0));
   UniqueChars error;
   UniqueCharsVector warnings;
-  // TODO: Support components
+  // TODO(wasm-cm): Support components
   SharedModule module = CompileBufferModule(
       *compileArgs, BytecodeBufferOrSource(source), &error, &warnings, nullptr);
   if (!module) {
@@ -511,7 +511,7 @@ bool wasm::CompileAndSerialize(JSContext* cx,
 
   UniqueChars error;
   UniqueCharsVector warnings;
-  // TODO: Support components
+  // TODO(wasm-cm): Support components
   SharedModule module =
       CompileBufferModule(*compileArgs, BytecodeBufferOrSource(bytecodeSource),
                           &error, &warnings, &listener);
@@ -1834,11 +1834,6 @@ const JSFunctionSpec WasmComponentObject::static_methods[] = {
 };
 
 /* static */
-void WasmComponentObject::finalize(JS::GCContext* gcx, JSObject* obj) {
-  // TODO: Finalize inner modules etc.
-}
-
-/* static */
 WasmComponentObject* WasmComponentObject::create(JSContext* cx,
                                                  const Component& component,
                                                  HandleObject proto) {
@@ -1848,7 +1843,36 @@ WasmComponentObject* WasmComponentObject::create(JSContext* cx,
     return nullptr;
   }
 
+  // See comment in WasmModuleObject::create. Because we also compile code when
+  // creating components, we perform a flush here as well.
+  jit::FlushExecutionContext();
+
+  InitReservedSlot(obj, COMPONENT_SLOT, const_cast<Component*>(&component),
+                   component.gcMallocBytesExcludingCode(),
+                   MemoryUse::WasmComponent);
+  component.AddRef();
+
+  // TODO(wasm-cm): Not only is the amount being passed to incJitMemory probably
+  // wrong here (per the comment on tier1CodeMemoryUsed), but we may also need
+  // to separately account for any code memory allocated later, as bug 1569888
+  // alludes to.
+  size_t codeMemory = component.tier1CodeMemoryUsed();
+  if (codeMemory) {
+    cx->zone()->incJitMemory(codeMemory);
+  }
+
   return obj;
+}
+
+/* static */
+void WasmComponentObject::finalize(JS::GCContext* gcx, JSObject* obj) {
+  const Component& component = obj->as<WasmComponentObject>().component();
+  size_t codeMemory = component.tier1CodeMemoryUsed();
+  if (codeMemory) {
+    obj->zone()->decJitMemory(codeMemory);
+  }
+  gcx->release(obj, &component, component.gcMallocBytesExcludingCode(),
+               MemoryUse::WasmComponent);
 }
 
 /* static */
