@@ -1,3 +1,5 @@
+// |jit-test| skip-if: !wasmComponentsEnabled()
+
 // Helper: builds a component that defines a component func type, provides a
 // core module with a core function of the given core signature, aliases and
 // lifts it.

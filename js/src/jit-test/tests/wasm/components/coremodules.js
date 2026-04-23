@@ -1,3 +1,5 @@
+// |jit-test| skip-if: !wasmComponentsEnabled()
+
 // Empty core module.
 new WebAssembly.Component(wasmTextToBinary(`
 (component

@@ -1,3 +1,5 @@
+// |jit-test| skip-if: !wasmComponentsEnabled()
+
 assertErrorMessage(() => new WebAssembly.Component(new Uint8Array([
   0,
 ])), WebAssembly.CompileError, /failed to match magic number/);

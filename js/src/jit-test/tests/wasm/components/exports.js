@@ -1,3 +1,5 @@
+// |jit-test| skip-if: !wasmComponentsEnabled()
+
 // Export a function.
 new WebAssembly.Component(wasmTextToBinary(`
 (component

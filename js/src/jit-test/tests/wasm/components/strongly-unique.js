@@ -1,3 +1,5 @@
+// |jit-test| skip-if: !wasmComponentsEnabled()
+
 // We use imported functions as our oracle for strongly-uniqueness, as only
 // functions allow the full range of plain names.
 function assertAllStronglyUnique(names) {

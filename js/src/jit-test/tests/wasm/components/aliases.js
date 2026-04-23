@@ -1,3 +1,6 @@
+// |jit-test| skip-if: !wasmComponentsEnabled()
+
+// ----------------------------------------------------------------------------
 // Core export aliases - happy paths
 
 // Alias each of the five core sorts individually.
@@ -61,6 +64,7 @@ new WebAssembly.Component(wasmTextToBinary(`
 )
 `));
 
+// ----------------------------------------------------------------------------
 // Core export aliases - error cases
 
 // Invalid core instance index.
@@ -126,6 +130,7 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 )
 `)), WebAssembly.CompileError, /is not a tag/);
 
+// ----------------------------------------------------------------------------
 // Component export alias
 // TODO(wasm-cm)
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
@@ -138,6 +143,7 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
 )
 `)), WebAssembly.CompileError, /unexpected section ID/);
 
+// ----------------------------------------------------------------------------
 // Outer alias
 // TODO(wasm-cm)
 assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`

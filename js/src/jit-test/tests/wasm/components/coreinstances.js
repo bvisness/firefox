@@ -1,3 +1,5 @@
+// |jit-test| skip-if: !wasmComponentsEnabled()
+
 // Basic instantiation.
 new WebAssembly.Component(wasmTextToBinary(`
 (component

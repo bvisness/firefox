@@ -1,3 +1,5 @@
+// |jit-test| skip-if: !wasmComponentsEnabled()
+
 // ----------------------------------------------------------------------------
 // Primitive types
 {

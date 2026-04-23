@@ -4,5 +4,9 @@
 // Ideas for what to test later: calling without `new`, prototype chain,
 // toString tag, instanceof, typeof, etc.
 
-assertErrorMessage(() => new WebAssembly.Component(), TypeError, /1 argument required/);
-assertErrorMessage(() => new WebAssembly.Component(42), TypeError, /first argument must be an ArrayBuffer/);
+if (wasmComponentsEnabled()) {
+  assertErrorMessage(() => new WebAssembly.Component(), TypeError, /1 argument required/);
+  assertErrorMessage(() => new WebAssembly.Component(42), TypeError, /first argument must be an ArrayBuffer/);
+} else {
+  assertErrorMessage(() => new WebAssembly.Component(), TypeError, /not a constructor/);
+}

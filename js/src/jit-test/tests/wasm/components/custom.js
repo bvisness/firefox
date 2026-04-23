@@ -1,3 +1,5 @@
+// |jit-test| skip-if: !wasmComponentsEnabled()
+
 // Custom sections should be silently skipped.
 new WebAssembly.Component(new Uint8Array([
   0, 0x61, 0x73, 0x6D,
