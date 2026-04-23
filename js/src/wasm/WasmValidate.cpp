@@ -5241,6 +5241,10 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
       if (numTypes == 0) {
         return d.fail("tuples must have at least one type");
       }
+      if (numTypes > MaxComponentTupleTypes) {
+        return d.failf("too many types in tuple (max %d)",
+                       MaxComponentTupleTypes);
+      }
 
       ComponentValTypeVector types;
       if (!types.reserve(numTypes)) {
@@ -5390,6 +5394,9 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
       StronglyUniqueNameSet paramDeduper;
       if (!d.readVarU32(&numParams)) {
         return d.fail("expected number of params");
+      }
+      if (numParams > MaxComponentParams) {
+        return d.failf("too many params (max %d)", MaxComponentParams);
       }
       if (!ft.paramTypes.reserve(numParams) ||
           !ft.paramNames.reserve(numParams)) {
@@ -5586,6 +5593,9 @@ static bool DecodeCanonOpts(Decoder& d, ComponentCanonOptVector* opts) {
   uint32_t count;
   if (!d.readVarU32(&count)) {
     return d.fail("expected number of canonopts");
+  }
+  if (count > MaxComponentCanonOpts) {
+    return d.failf("too many canonopts (max %d)", MaxComponentCanonOpts);
   }
 
   for (uint32_t i = 0; i < count; i++) {
