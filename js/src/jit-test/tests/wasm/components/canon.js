@@ -595,4 +595,4 @@ assertErrorMessage(() => new WebAssembly.Component(wasmTextToBinary(`
   (func (type 0) (canon lift (core func 0)))
   (core func (canon lower (func 0)))
 )
-`)), WebAssembly.CompileError, /TODO/);
+`)), WebAssembly.CompileError, /canon lower is not supported/);
