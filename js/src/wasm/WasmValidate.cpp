@@ -24,6 +24,7 @@
 #include "js/String.h"  // JS::MaxStringLength
 #include "vm/JSContext.h"
 #include "vm/Realm.h"
+#include "wasm/WasmConstants.h"
 #include "wasm/WasmDump.h"
 #include "wasm/WasmInitExpr.h"
 #include "wasm/WasmOpIter.h"
@@ -4756,7 +4757,10 @@ bool wasm::DecodeCoreInstance(Decoder& d, MutableComponent& c) {
       if (!d.readVarU32(&numArgs)) {
         return d.fail("expected number of instantiate arguments");
       }
-      // TODO(wasm-cm): Implementation limit for instantiate args?
+      if (numArgs > MaxComponentCoreInstantiateArgs) {
+        return d.failf("too many core instantiate args (max %d)",
+                       MaxComponentCoreInstantiateArgs);
+      }
 
       CoreInstanceInstantiateArgVector args;
       if (!args.reserve(numArgs)) {
@@ -5122,8 +5126,11 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
       if (numFields == 0) {
         return d.fail("records must have at least one field");
       }
+      if (numFields > MaxComponentRecordFields) {
+        return d.failf("too many record fields (max %d)",
+                       MaxComponentRecordFields);
+      }
 
-      // TODO(wasm-cm): Implementation limit on number of record fields
       if (!fields.reserve(numFields)) {
         return false;
       }
@@ -5166,8 +5173,11 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
       if (numCases == 0) {
         return d.fail("variants must have at least one case");
       }
+      if (numCases > MaxComponentVariantCases) {
+        return d.failf("too many variant cases (max %d)",
+                       MaxComponentVariantCases);
+      }
 
-      // TODO(wasm-cm): Implementation limit on number of variant cases
       if (!cases.reserve(numCases)) {
         return false;
       }
@@ -5297,7 +5307,9 @@ bool wasm::DecodeComponentType(Decoder& d, MutableComponent& c) {
       if (numCases == 0) {
         return d.fail("enum must have at least one case");
       }
-      // TODO(wasm-cm): Implementation limit for enum cases
+      if (numCases > MaxComponentEnumCases) {
+        return d.failf("too many enum cases (max %d)", MaxComponentEnumCases);
+      }
 
       CacheableNameVector labels;
       StronglyUniqueNameSet caseLabelDedup;
@@ -5484,6 +5496,10 @@ bool wasm::DecodeComponentAlias(Decoder& d, MutableComponent& c) {
 
       switch (sort) {
         case ComponentSort::CoreFunction: {
+          if (c->coreFuncs.length() >= MaxComponentCoreFuncs) {
+            return d.failf("too many core funcs (max %d)",
+                           MaxComponentCoreFuncs);
+          }
           if (exp->kind() != DefinitionKind::Function) {
             return d.failf(
                 "export \"%.*s\" of core instance %d is not a function",
@@ -5495,6 +5511,10 @@ bool wasm::DecodeComponentAlias(Decoder& d, MutableComponent& c) {
           }
         } break;
         case ComponentSort::CoreTable: {
+          if (c->coreTables.length() >= MaxComponentCoreTables) {
+            return d.failf("too many core tables (max %d)",
+                           MaxComponentCoreTables);
+          }
           if (exp->kind() != DefinitionKind::Table) {
             return d.failf("export \"%.*s\" of core instance %d is not a table",
                            CacheableName_Printf(exportName), instanceIdx);
@@ -5505,6 +5525,10 @@ bool wasm::DecodeComponentAlias(Decoder& d, MutableComponent& c) {
           }
         } break;
         case ComponentSort::CoreMemory: {
+          if (c->coreMemories.length() >= MaxComponentCoreMemories) {
+            return d.failf("too many core memories (max %d)",
+                           MaxComponentCoreMemories);
+          }
           if (exp->kind() != DefinitionKind::Memory) {
             return d.failf(
                 "export \"%.*s\" of core instance %d is not a memory",
@@ -5516,6 +5540,10 @@ bool wasm::DecodeComponentAlias(Decoder& d, MutableComponent& c) {
           }
         } break;
         case ComponentSort::CoreGlobal: {
+          if (c->coreGlobals.length() >= MaxComponentCoreGlobals) {
+            return d.failf("too many core globals (max %d)",
+                           MaxComponentCoreGlobals);
+          }
           if (exp->kind() != DefinitionKind::Global) {
             return d.failf(
                 "export \"%.*s\" of core instance %d is not a global",
@@ -5527,6 +5555,9 @@ bool wasm::DecodeComponentAlias(Decoder& d, MutableComponent& c) {
           }
         } break;
         case ComponentSort::CoreTag: {
+          if (c->coreTags.length() >= MaxComponentCoreTags) {
+            return d.failf("too many core tags (max %d)", MaxComponentCoreTags);
+          }
           if (exp->kind() != DefinitionKind::Tag) {
             return d.failf("export \"%.*s\" of core instance %d is not a tag",
                            CacheableName_Printf(exportName), instanceIdx);
@@ -5581,6 +5612,10 @@ bool wasm::DecodeComponentCanonDef(Decoder& d, MutableComponent& c) {
 
   switch (kind) {
     case 0x00: {  // canon lift <core:funcidx> <opts> <typeidx>
+      if (c->funcs.length() >= MaxComponentFuncs) {
+        return d.failf("too many funcs (max %d)", MaxComponentFuncs);
+      }
+
       uint8_t dummy;
       if (!d.readFixedU8(&dummy) || dummy != 0) {
         return d.fail("expected canonical definition");

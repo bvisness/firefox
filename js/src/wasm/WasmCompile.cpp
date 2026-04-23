@@ -36,6 +36,7 @@
 #include "vm/JSAtomState.h"
 #include "vm/Realm.h"
 #include "wasm/WasmBaselineCompile.h"
+#include "wasm/WasmConstants.h"
 #include "wasm/WasmFeatures.h"
 #include "wasm/WasmGenerator.h"
 #include "wasm/WasmIonCompile.h"
@@ -1073,8 +1074,10 @@ static SharedComponent CompileComponent(
         } break;
 
         case 1: {  // core:module
-          // TODO(wasm-cm): Implementation limit on number of core modules
-          // (before parsing)
+          if (c->coreModules.length() >= MaxComponentCoreModules) {
+            d.failf("too many core modules (max %d)", MaxComponentCoreModules);
+            return nullptr;
+          }
 
           bool unused_;
           if (!DecodePreamble(d, true, false, &unused_)) {
@@ -1095,8 +1098,12 @@ static SharedComponent CompileComponent(
             d.fail("expected number of instances");
             return nullptr;
           }
-
-          // TODO(wasm-cm): Implementation limit on number of instances
+          if (c->coreInstances.length() + uint64_t(numInstances) >
+              MaxComponentCoreInstances) {
+            d.failf("too many core instances (max %d)",
+                    MaxComponentCoreInstances);
+            return nullptr;
+          }
 
           for (uint32_t i = 0; i < numInstances; i++) {
             if (!DecodeCoreInstance(d, c)) {
@@ -1110,8 +1117,8 @@ static SharedComponent CompileComponent(
             d.fail("expected number of aliases");
             return nullptr;
           }
-
-          // TODO(wasm-cm): Implementation limit on number of aliases...?
+          // We do not check an implementation limit here because each alias
+          // adds entries to a different index space with its own limit.
 
           for (uint32_t i = 0; i < numAliases; i++) {
             if (!DecodeComponentAlias(d, c)) {
@@ -1125,8 +1132,10 @@ static SharedComponent CompileComponent(
             d.fail("expected number of types");
             return nullptr;
           }
-
-          // TODO(wasm-cm): Implementation limit on number of types
+          if (c->types.length() + uint64_t(numTypes) > MaxComponentTypes) {
+            d.failf("too many types (max %d)", MaxComponentTypes);
+            return nullptr;
+          }
 
           for (uint32_t i = 0; i < numTypes; i++) {
             if (!DecodeComponentType(d, c)) {
@@ -1140,9 +1149,7 @@ static SharedComponent CompileComponent(
             d.fail("expected number of canonical definitions");
             return nullptr;
           }
-
-          // TODO(wasm-cm): Implementation limit on number of canonical
-          // definitions?
+          // Implementation limits are checked in DecodeComponentCanonDef.
 
           for (uint32_t i = 0; i < numCanonDefs; i++) {
             if (!DecodeComponentCanonDef(d, c)) {
@@ -1156,7 +1163,11 @@ static SharedComponent CompileComponent(
             d.fail("expected number of imports");
             return nullptr;
           }
-          // TODO(wasm-cm): Implementation limit on number of imports?
+          if (c->imports.length() + uint64_t(numImports) >
+              MaxComponentImports) {
+            d.failf("too many imports (max %d)", MaxComponentImports);
+            return nullptr;
+          }
 
           for (uint32_t i = 0; i < numImports; i++) {
             if (!DecodeComponentImport(d, c)) {
@@ -1170,7 +1181,11 @@ static SharedComponent CompileComponent(
             d.fail("expected number of exports");
             return nullptr;
           }
-          // TODO(wasm-cm): Implementation limit on number of exports
+          if (c->exports.length() + uint64_t(numExports) >
+              MaxComponentExports) {
+            d.failf("too many exports (max %d)", MaxComponentExports);
+            return nullptr;
+          }
 
           for (uint32_t i = 0; i < numExports; i++) {
             if (!DecodeComponentExport(d, c)) {
