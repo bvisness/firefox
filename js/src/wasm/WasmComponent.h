@@ -11,6 +11,7 @@
 
 #  include "js/WasmComponent.h"
 
+#  include "mozilla/Atomics.h"
 #  include "mozilla/HashTable.h"
 #  include "mozilla/Maybe.h"
 #  include "mozilla/RefPtr.h"
@@ -22,6 +23,13 @@
 namespace js {
 namespace wasm {
 
+using ComponentString = mozilla::Span<const char>;
+using ComponentStringVector =
+    mozilla::Vector<ComponentString, 0, SystemAllocPolicy>;
+
+// A helper macro allowing ComponentStrings to be printed with `%.*s`.
+#  define ComponentString_Printf(n) (int)(n).Length(), (n).data()
+
 // A "sort", or "kind", of item in the component model, used for all cases where
 // we must refer to a different item.
 //
@@ -31,6 +39,8 @@ namespace wasm {
 // set. Additionally, sorts that can be exported by core modules (core:sort)
 // have the second-highest bit set, and correspond to wasm::DefinitionKind.
 enum class ComponentSort : uint8_t {
+  Invalid = 0,
+
   Func = 0x80 | 0x01,
   Type = 0x80 | 0x03,
   Component = 0x80 | 0x04,
@@ -45,6 +55,10 @@ enum class ComponentSort : uint8_t {
   CoreType = 0x10,
   CoreModule = 0x80 | 0x11,
   CoreInstance = 0x12,
+
+  // Type bounds
+  Eq = 0x20,
+  SubResource = 0x21,
 };
 
 // Checks if the given sort is valid for a component import or export (the
@@ -100,6 +114,10 @@ enum class ComponentTypeKind : uint8_t {
   Instance = 0x42,
   Resource = 0x3f,  // resource types with callbacks are not a separate kind
 
+  // Type bounds
+  Eq = 0x20,
+  SubResource = 0x21,
+
   // Convenience for ComponentTypeKindIsPrimitive. "First" and "last" refer to
   // the actual byte value.
   FirstPrimitive = String,
@@ -123,180 +141,231 @@ inline bool ComponentTypeKindIsValueType(ComponentTypeKind kind) {
          );
 }
 
-// A value type in the component model, i.e. one that can be used in function
-// parameters or other value contexts.
-class ComponentValType {
-  static constexpr uint32_t TypeIndexFlag = 1 << 31;
-  uint32_t bits_;
+inline bool ComponentTypeKindIsTypeBound(ComponentTypeKind kind) {
+  return kind == ComponentTypeKind::Eq ||
+         kind == ComponentTypeKind::SubResource;
+}
 
-  explicit ComponentValType(uint32_t bits) : bits_(bits) {}
-
- public:
-  // Creates a ComponentValType for a primitive (i.e. not a type reference).
-  static ComponentValType primitive(ComponentTypeKind kind) {
-    MOZ_ASSERT(ComponentTypeKindIsPrimitive(kind));
-    return ComponentValType(uint32_t(kind));
-  }
-  // Creates a ComponentValType referencing another type in the component.
-  static ComponentValType typeIndex(uint32_t idx) {
-    MOZ_ASSERT(!(idx & TypeIndexFlag));
-    return ComponentValType(TypeIndexFlag | idx);
-  }
-
-  bool isPrimitive() const { return !(bits_ & TypeIndexFlag); }
-  bool isTypeIndex() const { return bits_ & TypeIndexFlag; }
-  ComponentTypeKind asPrimitive() const {
-    MOZ_ASSERT(isPrimitive());
-    return ComponentTypeKind(bits_);
-  }
-  uint32_t asTypeIndex() const {
-    MOZ_ASSERT(isTypeIndex());
-    return bits_ & ~TypeIndexFlag;
-  }
-};
-using ComponentValTypeVector =
-    mozilla::Vector<ComponentValType, 0, SystemAllocPolicy>;
-
-struct ComponentRecordField {
-  CacheableName name;
-  ComponentValType type;
-
-  ComponentRecordField(CacheableName&& name_, ComponentValType type_)
-      : name(std::move(name_)), type(type_) {}
-};
+// Forward declarations to satisfy the methods in ComponentType
+class ComponentTypeDef;
+class ComponentType;
+struct ComponentRecordField;
+struct ComponentVariantCase;
+struct ComponentResultType;
+struct ComponentFuncType;
+class ComponentResourceType;
+using ComponentTypeVector =
+    mozilla::Vector<ComponentType, 0, SystemAllocPolicy>;
 using ComponentRecordFieldVector =
     mozilla::Vector<ComponentRecordField, 0, SystemAllocPolicy>;
-
-struct ComponentVariantCase {
-  CacheableName name;
-  mozilla::Maybe<ComponentValType> type;
-};
 using ComponentVariantCaseVector =
     mozilla::Vector<ComponentVariantCase, 0, SystemAllocPolicy>;
 
+// The type of an item within a component.
+class ComponentType {
+  // TODO(wasm-cm): See if we could do a fancy tagging scheme to store the kind
+  // in the bits of the pointer. It's a bit funky because right now we use high
+  // bits in the kind for various purposes and so we can't pack it down into 3
+  // or 4 bits like you'd want.
+  ComponentTypeKind kind_;
+
+  RefPtr<ComponentTypeDef> typeDef_;
+
+  explicit ComponentType(ComponentTypeKind kind)
+      : kind_(kind), typeDef_(nullptr) {
+    MOZ_ASSERT(ComponentTypeKindIsPrimitive(kind));
+  }
+  explicit ComponentType(ComponentTypeKind kind,
+                         RefPtr<ComponentTypeDef> typeDef)
+      : kind_(kind), typeDef_(std::move(typeDef)) {}
+
+ public:
+  ComponentType() : kind_(ComponentTypeKind(0)), typeDef_(nullptr) {}
+  bool isValid() const { return kind_ != ComponentTypeKind(0); }
+
+  static ComponentType primitive(ComponentTypeKind kind) {
+    MOZ_RELEASE_ASSERT(ComponentTypeKindIsPrimitive(kind));
+    return ComponentType(kind);
+  }
+  static ComponentType record(ComponentRecordFieldVector&& fields);
+  static ComponentType variant(ComponentVariantCaseVector&& cases);
+  static ComponentType list(ComponentType&& elemType);
+  static ComponentType tuple(ComponentTypeVector&& items);
+  static ComponentType flags(ComponentStringVector&& labels);
+  static ComponentType enum_(ComponentStringVector&& cases);
+  static ComponentType option(ComponentType&& type);
+  static ComponentType result(ComponentResultType&& type);
+  static ComponentType own(ComponentType&& type);
+  static ComponentType borrow(ComponentType&& type);
+  static ComponentType func(ComponentFuncType&& type);
+  static ComponentType resource(ComponentResourceType&& type);
+  static ComponentType subResource();
+
+  ComponentTypeKind kind() const { return kind_; }
+  RefPtr<ComponentTypeDef> typeDef() const { return typeDef_; }
+
+  const ComponentRecordFieldVector& asRecord() const;
+  const ComponentVariantCaseVector& asVariant() const;
+  ComponentType asList() const;
+  const ComponentTypeVector& asTuple() const;
+  const ComponentStringVector& asFlags() const;
+  const ComponentStringVector& asEnum() const;
+  ComponentType asOption() const;
+  ComponentResultType asResult() const;
+  ComponentType asOwn() const;
+  ComponentType asBorrow() const;
+  const ComponentFuncType& asFunc() const;
+  const ComponentResourceType& asResource() const;
+
+  bool operator==(const ComponentType& other) const {
+    return kind_ == other.kind_ && typeDef_ == other.typeDef_;
+  }
+  static bool maybeEquals(mozilla::Maybe<ComponentType> a,
+                          mozilla::Maybe<ComponentType> b) {
+    if (a.isNothing() && b.isNothing()) {
+      return true;
+    }
+    if (a.isSome() != b.isSome()) {
+      return false;
+    }
+    return *a == *b;
+  }
+};
+
+static_assert(std::is_default_constructible_v<ComponentType>);
+static_assert(std::is_copy_constructible_v<ComponentType>);
+
+struct ComponentTypeHasher {
+  using Key = ComponentType;
+  using Lookup = ComponentType;
+
+  static HashNumber hash(const Lookup& aLookup);
+  static bool match(const Key& aKey, const Lookup& aLookup);
+};
+
+struct ComponentCanonicalTypeSet {
+  mozilla::HashSet<ComponentType, ComponentTypeHasher, SystemAllocPolicy>
+      canonicalTypes_;
+
+  bool canonicalize(const ComponentType& type, ComponentType* canonicalized);
+};
+
+// Canonicalizes `type` against the process-wide canonical type set, returning
+// the canonical representative through `*canonicalized`. Thread-safe.
+[[nodiscard]] bool CanonicalizeComponentType(const ComponentType& type,
+                                             ComponentType* canonicalized);
+
+// Empties the process-wide canonical type set. Intended for shutdown / testing.
+void PurgeComponentCanonicalTypes();
+
+struct ComponentRecordField {
+  ComponentString name;
+  ComponentType type;
+
+  ComponentRecordField(ComponentString name_, ComponentType type_)
+      : name(name_), type(type_) {}
+
+  bool operator==(const ComponentRecordField& other) const {
+    return name == other.name && type == other.type;
+  }
+};
+
+struct ComponentVariantCase {
+  ComponentString name;
+  mozilla::Maybe<ComponentType> type;
+
+  bool operator==(const ComponentVariantCase& other) const {
+    return name == other.name && ComponentType::maybeEquals(type, other.type);
+  }
+};
+
 struct ComponentResultType {
-  mozilla::Maybe<ComponentValType> type;
-  mozilla::Maybe<ComponentValType> errorType;
+  mozilla::Maybe<ComponentType> type;
+  mozilla::Maybe<ComponentType> errorType;
+
+  static bool equals(const ComponentResultType& a,
+                     const ComponentResultType& b) {
+    return ComponentType::maybeEquals(a.type, b.type) &&
+           ComponentType::maybeEquals(a.errorType, b.errorType);
+  }
 };
 
 struct ComponentFuncType {
-  ComponentValTypeVector paramTypes;
-  CacheableNameVector paramNames;
-  mozilla::Maybe<ComponentValType> resultType;
-  bool isAsync;
+  ComponentTypeVector paramTypes;
+  ComponentStringVector paramNames;
+  mozilla::Maybe<ComponentType> resultType;
+
+  bool operator==(const ComponentFuncType& other) const {
+    MOZ_RELEASE_ASSERT(paramTypes.length() == paramNames.length());
+    MOZ_RELEASE_ASSERT(other.paramTypes.length() == other.paramNames.length());
+    if (paramTypes.length() != other.paramTypes.length()) {
+      return false;
+    }
+
+    for (size_t i = 0; i < paramTypes.length(); i++) {
+      if (paramTypes[i] != other.paramTypes[i] ||
+          paramNames[i] != other.paramNames[i]) {
+        return false;
+      }
+    }
+
+    if (!ComponentType::maybeEquals(resultType, other.resultType)) {
+      return false;
+    }
+
+    return true;
+  }
 };
 
-// A type defined within a component.
-class ComponentDefType {
-  ComponentTypeKind kind_;
+class ComponentResourceType {
+  // All resource types have (rep i32) for the time being.
 
-  // TODO(wasm-cm): Add component types, instance types, resource types?
-  using TypeProps = mozilla::Variant<mozilla::Nothing,            // primitive,
-                                     ComponentRecordFieldVector,  // record
-                                     ComponentVariantCaseVector,  // variant
-                                     ComponentValType,        // list, option
-                                     ComponentValTypeVector,  // tuple
-                                     CacheableNameVector,     // flags, enum
-                                     ComponentResultType,     // result
-                                     uint32_t,                // own, borrow
+  // Every resource type can be uniquely identified by this identifier
+  // (including (sub resource) bounds, but that is stored elsewhere).
+  uint32_t resourceID_;
 
-                                     ComponentFuncType  // func
-                                     >;
-  TypeProps props_;
-
-  explicit ComponentDefType(ComponentTypeKind kind)
-      : kind_(kind), props_(mozilla::Nothing()) {
-    MOZ_ASSERT(ComponentTypeKindIsPrimitive(kind));
-  }
-  explicit ComponentDefType(ComponentRecordFieldVector&& fields)
-      : kind_(ComponentTypeKind::Record), props_(std::move(fields)) {}
-  explicit ComponentDefType(ComponentVariantCaseVector&& cases)
-      : kind_(ComponentTypeKind::Variant), props_(std::move(cases)) {}
-  explicit ComponentDefType(ComponentTypeKind kind, ComponentValType&& type)
-      : kind_(kind), props_(std::move(type)) {
-    MOZ_ASSERT(kind == ComponentTypeKind::List ||
-               kind == ComponentTypeKind::Option);
-  }
-  explicit ComponentDefType(ComponentValTypeVector&& types)
-      : kind_(ComponentTypeKind::Tuple), props_(std::move(types)) {}
-  explicit ComponentDefType(ComponentTypeKind kind,
-                            CacheableNameVector&& labels)
-      : kind_(kind), props_(std::move(labels)) {
-    MOZ_ASSERT(kind == ComponentTypeKind::Flags ||
-               kind == ComponentTypeKind::Enum);
-  }
-  explicit ComponentDefType(ComponentResultType&& type)
-      : kind_(ComponentTypeKind::Result), props_(std::move(type)) {}
-  explicit ComponentDefType(ComponentFuncType&& funcType)
-      : kind_(ComponentTypeKind::Func), props_(std::move(funcType)) {}
+  // If negative, no dtor.
+  int32_t dtorIndex_;
 
  public:
-  static ComponentDefType primitive(ComponentTypeKind kind) {
-    MOZ_ASSERT(ComponentTypeKindIsPrimitive(kind));
-    return ComponentDefType(kind);
-  }
-  static ComponentDefType record(ComponentRecordFieldVector&& fields) {
-    return ComponentDefType(std::move(fields));
-  }
-  static ComponentDefType variant(ComponentVariantCaseVector&& cases) {
-    return ComponentDefType(std::move(cases));
-  }
-  static ComponentDefType list(ComponentValType&& type) {
-    return ComponentDefType(ComponentTypeKind::List, std::move(type));
-  }
-  static ComponentDefType tuple(ComponentValTypeVector&& types) {
-    return ComponentDefType(std::move(types));
-  }
-  static ComponentDefType flags(CacheableNameVector&& labels) {
-    return ComponentDefType(ComponentTypeKind::Flags, std::move(labels));
-  }
-  static ComponentDefType enum_(CacheableNameVector&& labels) {
-    return ComponentDefType(ComponentTypeKind::Enum, std::move(labels));
-  }
-  static ComponentDefType option(ComponentValType&& type) {
-    return ComponentDefType(ComponentTypeKind::Option, std::move(type));
-  }
-  static ComponentDefType result(ComponentResultType&& type) {
-    return ComponentDefType(std::move(type));
-  }
-  static ComponentDefType func(ComponentFuncType&& ft) {
-    return ComponentDefType(std::move(ft));
-  }
+  explicit ComponentResourceType(uint32_t id, int32_t dtorIndex = -1)
+      : resourceID_(id), dtorIndex_(dtorIndex) {}
 
-  ComponentTypeKind kind() const { return kind_; }
+  uint32_t id() const { return resourceID_; }
 
-  const ComponentRecordFieldVector& asRecord() const {
-    MOZ_RELEASE_ASSERT(kind() == ComponentTypeKind::Record);
-    return props_.as<ComponentRecordFieldVector>();
+  bool hasDtor() const { return dtorIndex_ >= 0; }
+  uint32_t dtorIndex() const {
+    MOZ_RELEASE_ASSERT(hasDtor());
+    return dtorIndex_;
   }
-  const ComponentVariantCaseVector& asVariant() const {
-    MOZ_RELEASE_ASSERT(kind() == ComponentTypeKind::Variant);
-    return props_.as<ComponentVariantCaseVector>();
-  }
-  const ComponentValTypeVector& asTuple() const {
-    MOZ_RELEASE_ASSERT(kind() == ComponentTypeKind::Tuple);
-    return props_.as<ComponentValTypeVector>();
-  }
-  ComponentValType asOption() const {
-    MOZ_RELEASE_ASSERT(kind() == ComponentTypeKind::Option);
-    return props_.as<ComponentValType>();
-  }
-  ComponentResultType asResult() const {
-    MOZ_RELEASE_ASSERT(kind() == ComponentTypeKind::Result);
-    return props_.as<ComponentResultType>();
-  }
-  const ComponentFuncType& asFunc() const {
-    MOZ_RELEASE_ASSERT(kind() == ComponentTypeKind::Func);
-    return props_.as<ComponentFuncType>();
-  }
+};
+
+inline uint32_t NewResourceId() {
+  static mozilla::Atomic<uint32_t, mozilla::Relaxed> counter{0};
+  return ++counter;
+}
+
+using ComponentTypeSchema = mozilla::Variant<
+    mozilla::Nothing, ComponentType, ComponentRecordFieldVector,
+    ComponentVariantCaseVector, ComponentTypeVector, ComponentStringVector,
+    ComponentResultType, ComponentFuncType, ComponentResourceType>;
+
+class ComponentTypeDef : public AtomicRefCounted<ComponentTypeDef> {
+  ComponentTypeSchema schema_;
+
+ public:
+  explicit ComponentTypeDef(ComponentTypeSchema&& schema)
+      : schema_(std::move(schema)) {}
+
+  const ComponentTypeSchema& schema() const { return schema_; }
 };
 
 class Component;
 
 [[nodiscard]] bool FlattenTypes(const Component& c,
-                                const ComponentValTypeVector& types,
+                                const ComponentTypeVector& types,
                                 ValTypeVector* result);
-[[nodiscard]] bool FlattenType(const Component& c, const ComponentValType& type,
+[[nodiscard]] bool FlattenType(const Component& c, const ComponentType& type,
                                ValTypeVector* result);
 [[nodiscard]] bool FlattenRecord(const Component& c,
                                  const ComponentRecordFieldVector& fields,
@@ -327,12 +396,11 @@ struct StronglyUniqueNameHasher {
 // A class which can be used to check if a set of component model names is
 // strongly-unique.
 class StronglyUniqueNameSet {
-  mozilla::HashSet<mozilla::Span<const char>, StronglyUniqueNameHasher,
-                   SystemAllocPolicy>
+  mozilla::HashSet<ComponentString, StronglyUniqueNameHasher, SystemAllocPolicy>
       data_;
 
  public:
-  [[nodiscard]] bool add(mozilla::Span<const char> name, bool* duplicate);
+  [[nodiscard]] bool add(ComponentString name, bool* duplicate);
 };
 
 struct ComponentCanonOpt {
@@ -342,77 +410,152 @@ struct ComponentCanonOpt {
 using ComponentCanonOptVector =
     mozilla::Vector<ComponentCanonOpt, 0, SystemAllocPolicy>;
 
-struct ComponentLiftedFuncDesc {
-  // TODO(wasm-cm): Actually store something useful here. I'm not sure at the
-  // moment if it makes sense to store the raw index, options, and dest type, or
-  // to store some kind of new value here. It will all depend on what
-  // instantiation actually looks like. So not touching it for now.
-};
-
-// An alias to another item defined in the component model, usually in a core or
-// component instance, but also possibly an "outer" alias referring to an item
-// defined in a parent component.
-//
-// All three possible kinds of aliases (component export, core export, and
-// outer) boil down to two u32 indexes, the first referring to a component
-// instance or core instance, and the second referring to an item within some
-// index space on that instance.
-class ComponentAlias {
-  // For export aliases, the index of the component instance or core instance.
-  // For outer aliases, the number of enclosing components to jump out to.
-  uint32_t instanceIndex_;
-
-  // The index of the aliased item in its component instance or core instance.
-  uint32_t innerIndex_;
-
-  // Whether the alias is to be interpreted as an outer alias.
-  bool isOuter_;
-
-  // Whether `instanceIdx` refers to a core instance or component instance.
-  bool isCoreInstance_;
-
-  // The sort of item being aliased.
-  ComponentSort sort_;
-
-  explicit ComponentAlias(uint32_t instanceIdx, uint32_t innerIdx,
-                          ComponentSort sort, bool isOuter, bool isCoreInstance)
-      : instanceIndex_(instanceIdx),
-        innerIndex_(innerIdx),
-        isOuter_(isOuter),
-        isCoreInstance_(isCoreInstance),
-        sort_(sort) {}
+class ComponentFuncDesc {
+  uint32_t typeIndex_;
+  ComponentCanonOptVector canonOpts_;
 
  public:
-  static ComponentAlias fromExport(uint32_t instanceIdx, uint32_t innerIdx,
-                                   ComponentSort sort) {
-    MOZ_ASSERT(!ComponentSortIsCoreSort(sort));
-    return ComponentAlias(instanceIdx, innerIdx, sort, /*isOuter=*/false,
-                          /*isCoreInstance=*/false);
-  }
-  static ComponentAlias fromCoreExport(uint32_t instanceIdx, uint32_t innerIdx,
-                                       ComponentSort sort) {
-    MOZ_ASSERT(ComponentSortIsCoreSort(sort));
-    return ComponentAlias(instanceIdx, innerIdx, sort, /*isOuter=*/false,
-                          /*isCoreInstance=*/true);
-  }
-  static ComponentAlias outer(uint32_t count, uint32_t index,
-                              ComponentSort sort) {
-    MOZ_ASSERT(!ComponentSortIsCoreSort(sort));
-    return ComponentAlias(count, index, sort, /*isOuter=*/true,
-                          /*isCoreInstance=*/false);
-  }
+  ComponentFuncDesc(uint32_t typeIndex, ComponentCanonOptVector&& canonOpts)
+      : typeIndex_(typeIndex), canonOpts_(std::move(canonOpts)) {}
 
-  bool isExport() const { return !isOuter_ && !isCoreInstance_; }
-  bool isCoreExport() const { return !isOuter_ && isCoreInstance_; }
-  bool isOuter() const {
-    MOZ_ASSERT(!isCoreInstance_);
-    return isOuter_;
-  }
-
-  ComponentSort sort() const { return sort_; }
-  uint32_t instanceIndex() const { return instanceIndex_; }
-  uint32_t itemIndex() const { return innerIndex_; }
+  // This returns the raw type index. To get the ComponentFuncType, call
+  // Component::typeForFunc instead.
+  uint32_t typeIndex() const { return typeIndex_; }
+  const ComponentCanonOptVector& canonOpts() const { return canonOpts_; }
 };
+
+enum class ComponentAliasKind : uint8_t {
+  CoreExport,
+  Export,
+  Outer,
+};
+
+// A generalized "alias" to an item in the component model. In addition to true
+// aliases, a ComponentAlias may also reference an import, an export, or an item
+// defined in the component itself. This is the main type used for each index
+// space in the component model, as imports, exports, aliases, and defined items
+// can be interleaved in any order.
+//
+// The data is stored into two fields, one of which identifies the index space
+// for the item (possibly in another component), and the other of which is the
+// index in that index space.
+//
+// This first field stores all the information necessary to find the index space
+// for the item. It is a packed field laid out like so:
+//
+//     00 00 00000000 00000000000000000000
+//     │  │  │        └ instance index (Kind::Alias only)
+//     │  │  └ alias sort (type ComponentSort, Kind::Alias only)
+//     │  └ alias kind (type AliasKind, Kind::Alias only)
+//     └ kind (type Kind)
+//
+// For all kinds except Kind::Alias, this is basically a big 32-bit enum where
+// only the top two bits are used. But for Kind::Alias we additionally store the
+// component-level AliasKind (core export alias, component export alias, or
+// outer alias) and the ComponentSort (e.g. Func or Type). Finally there is the
+// instance index, which is the index of the core instance, component instance,
+// or outer component to fetch an item from.
+//
+// The second field is simply a uint32_t item index like you'd find anywhere
+// else. Together, this means the common case for defined items, imports, and
+// exports is just:
+//
+//     if (firstField == (Kind::Defined << KindShift)) {
+//         return items[secondField];
+//     }
+//
+class ComponentAlias {
+  uint32_t whatAndWhere_;
+  uint32_t itemIndex_;
+
+ public:
+  static constexpr uint32_t KindShift = 30;
+  static constexpr uint32_t KindMask = 0b11 << KindShift;
+  static constexpr uint32_t AliasKindShift = 28;
+  static constexpr uint32_t AliasKindMask = 0b11 << AliasKindShift;
+  static constexpr uint32_t AliasSortShift = 20;
+  static constexpr uint32_t AliasSortMask = 0b11111111 << AliasSortShift;
+  static constexpr uint32_t AliasInstanceMask = (1 << AliasSortShift) - 1;
+
+  enum class Kind : uint8_t {
+    Defined,
+    Import,
+    Export,
+    Alias,
+  };
+
+  explicit ComponentAlias(Kind kind, uint32_t itemIndex)
+      : whatAndWhere_(uint32_t(kind) << KindShift), itemIndex_(itemIndex) {
+    MOZ_ASSERT(kind != Kind::Alias);
+    MOZ_ASSERT(this->kind() == kind);
+  }
+  explicit ComponentAlias(ComponentAliasKind aliasKind, ComponentSort sort,
+                          uint32_t instanceIndex, uint32_t itemIndex)
+      : whatAndWhere_(0), itemIndex_(itemIndex) {
+    MOZ_ASSERT((instanceIndex & ~AliasInstanceMask) == 0);
+    whatAndWhere_ |= uint32_t(Kind::Alias) << KindShift;
+    whatAndWhere_ |= uint32_t(aliasKind) << AliasKindShift;
+    whatAndWhere_ |= uint32_t(sort) << AliasSortShift;
+    whatAndWhere_ |= instanceIndex;
+
+    MOZ_ASSERT(kind() == Kind::Alias);
+    MOZ_ASSERT(this->aliasKind() == aliasKind);
+    MOZ_ASSERT(aliasSort() == sort);
+    MOZ_ASSERT(aliasInstanceIndex() == instanceIndex);
+  }
+
+ public:
+  static ComponentAlias defined(uint32_t itemIndex) {
+    return ComponentAlias(Kind::Defined, itemIndex);
+  }
+  static ComponentAlias import(uint32_t itemIndex) {
+    return ComponentAlias(Kind::Import, itemIndex);
+  }
+  static ComponentAlias export_(uint32_t itemIndex) {
+    return ComponentAlias(Kind::Export, itemIndex);
+  }
+  static ComponentAlias alias(ComponentAliasKind aliasKind, ComponentSort sort,
+                              uint32_t instanceIndex, uint32_t itemIndex) {
+    return ComponentAlias(aliasKind, sort, instanceIndex, itemIndex);
+  }
+
+  Kind kind() const { return Kind((whatAndWhere_ & KindMask) >> KindShift); }
+  bool isDefined() const {
+    MOZ_ASSERT((whatAndWhere_ & ~KindMask) == 0);
+    return whatAndWhere_ == (uint32_t(Kind::Defined) << KindShift);
+  }
+  bool isImport() const {
+    MOZ_ASSERT((whatAndWhere_ & ~KindMask) == 0);
+    return whatAndWhere_ == (uint32_t(Kind::Import) << KindShift);
+  }
+  bool isExport() const {
+    MOZ_ASSERT((whatAndWhere_ & ~KindMask) == 0);
+    return whatAndWhere_ == (uint32_t(Kind::Export) << KindShift);
+  }
+  bool isAlias() const {
+    return (whatAndWhere_ & KindMask) == (uint32_t(Kind::Alias) << KindShift);
+  }
+
+  uint32_t itemIndex() const { return itemIndex_; }
+
+  ComponentAliasKind aliasKind() const {
+    MOZ_RELEASE_ASSERT(isAlias());
+    return ComponentAliasKind((whatAndWhere_ & AliasKindMask) >>
+                              AliasKindShift);
+  }
+  ComponentSort aliasSort() const {
+    MOZ_RELEASE_ASSERT(isAlias());
+    return ComponentSort((whatAndWhere_ & AliasSortMask) >> AliasSortShift);
+  }
+  uint32_t aliasInstanceIndex() const {
+    MOZ_RELEASE_ASSERT(isAlias());
+    return whatAndWhere_ & AliasInstanceMask;
+  }
+};
+
+// TODO(wasm-cm): Add static asserts for MaxComponents and
+// MaxComponentNestingDepth or whatever, eventually
+static_assert(MaxComponentCoreInstances <= ComponentAlias::AliasInstanceMask);
 
 struct CoreInstanceInstantiateArg {
   CacheableName name;
@@ -460,103 +603,311 @@ using CoreInstanceDesc = mozilla::Variant<CoreInstanceDescFromModule,
 // Describes an import or export from a wasm component.
 class ComponentExternDesc {
   ComponentSort sort_;
+  ComponentType type_;
 
-  // Used for kinds CoreModule, Func, Component, Instance, and the `eq` case of
-  // Type.
-  uint32_t typeIndex_;
+  // TODO(wasm-cm): This is a total hack, but since we currently don't have a
+  // notion of core module types, we actually just store the index of the
+  // relevant core module within the component. This obviously will not work as
+  // soon as we do anything with multiple components.
+  uint32_t coreModuleIndex_;
 
-  explicit ComponentExternDesc(ComponentSort sort) : sort_(sort) {
+  explicit ComponentExternDesc(ComponentSort sort, ComponentType&& type)
+      : sort_(sort), type_(std::move(type)) {
     MOZ_ASSERT(ComponentSortValidForExternDesc(sort));
   }
+  explicit ComponentExternDesc(uint32_t coreModuleIndex)
+      : sort_(ComponentSort::CoreModule), coreModuleIndex_(coreModuleIndex) {}
 
  public:
   ComponentExternDesc() = default;
 
-  static ComponentExternDesc func(uint32_t funcTypeIndex) {
-    ComponentExternDesc desc(ComponentSort::Func);
-    desc.typeIndex_ = funcTypeIndex;
-    return desc;
+  static ComponentExternDesc func(ComponentType&& funcType) {
+    MOZ_ASSERT(funcType.kind() == ComponentTypeKind::Func);
+    return ComponentExternDesc(ComponentSort::Func, std::move(funcType));
   }
-  static ComponentExternDesc coreModule(uint32_t coreModuleTypeIndex) {
-    ComponentExternDesc desc(ComponentSort::CoreModule);
-    desc.typeIndex_ = coreModuleTypeIndex;
-    return desc;
+  static ComponentExternDesc type(ComponentType&& type) {
+    return ComponentExternDesc(ComponentSort::Type, std::move(type));
+  }
+  static ComponentExternDesc coreModule(uint32_t coreModuleIndex) {
+    return ComponentExternDesc(coreModuleIndex);
   }
 
+  bool isValid() const { return sort_ != ComponentSort::Invalid; }
   ComponentSort sort() const { return sort_; }
+  ComponentType asFunc() const {
+    MOZ_RELEASE_ASSERT(sort() == ComponentSort::Func);
+    return type_;
+  }
+  ComponentType asType() const {
+    MOZ_RELEASE_ASSERT(sort() == ComponentSort::Type);
+    return type_;
+  }
+  uint32_t asCoreModule() const {
+    MOZ_RELEASE_ASSERT(sort() == ComponentSort::CoreModule);
+    // TODO(wasm-cm): This should obviously return a proper core module type,
+    // when we actually support that.
+    return coreModuleIndex_;
+  }
+
+  static bool matches(const ComponentExternDesc& sub,
+                      const ComponentExternDesc& super);
 };
 
+static_assert(std::is_default_constructible_v<ComponentExternDesc>);
+
 class ComponentImport {
-  CacheableName name_;
+  ComponentString name_;
   ComponentExternDesc externDesc_;
 
  public:
-  explicit ComponentImport(CacheableName&& name,
+  explicit ComponentImport(ComponentString name,
                            const ComponentExternDesc& externDesc)
-      : name_(std::move(name)), externDesc_(externDesc) {}
+      : name_(name), externDesc_(externDesc) {}
 
-  const CacheableName& name() const { return name_; }
+  const ComponentString& name() const { return name_; }
   const ComponentExternDesc& externDesc() const { return externDesc_; }
 };
 
 class ComponentExport {
-  CacheableName name_;
-  ComponentSort sort_;
-  uint32_t index_;
+  ComponentString name_;
+  ComponentExternDesc externDesc_;
 
  public:
-  explicit ComponentExport(CacheableName&& name, ComponentSort sort,
-                           uint32_t index)
-      : name_(std::move(name)), sort_(sort), index_(index) {}
+  explicit ComponentExport(ComponentString name, ComponentExternDesc externDesc)
+      : name_(name), externDesc_(externDesc) {}
 
-  const CacheableName& name() const { return name_; }
-  ComponentSort sort() const { return sort_; }
-  uint32_t index() const { return index_; }
+  const ComponentString& name() const { return name_; }
+  const ComponentExternDesc& externDesc() const { return externDesc_; }
 };
 
+// TODO(wasm-cm): This type is enormous, but a lot of the storage is due to
+// containers like HashMap and Vector that aren't actually required once the
+// component is built and validated. It would probably be smart to split this
+// into ComponentBuilder and Component classes so that the final version can be
+// smaller. (After all, we will have a lot of components in practice!)
 class Component : public JS::WasmComponent {
+ public:
   using CoreModuleVector = mozilla::Vector<SharedModule, 0, SystemAllocPolicy>;
   using CoreInstanceVector =
       mozilla::Vector<CoreInstanceDesc, 0, SystemAllocPolicy>;
-  using TypeVector = mozilla::Vector<ComponentDefType, 0, SystemAllocPolicy>;
-  using FuncVector =
-      mozilla::Vector<ComponentLiftedFuncDesc, 0, SystemAllocPolicy>;
-  using ImportVector = Vector<ComponentImport, 0, SystemAllocPolicy>;
-  using ExportVector = Vector<ComponentExport, 0, SystemAllocPolicy>;
-  using AliasVector = Vector<ComponentAlias, 0, SystemAllocPolicy>;
+  using TypeVector = mozilla::Vector<ComponentType, 0, SystemAllocPolicy>;
+  using FuncVector = mozilla::Vector<ComponentFuncDesc, 0, SystemAllocPolicy>;
+  using ImportVector = mozilla::Vector<ComponentImport, 0, SystemAllocPolicy>;
+  using ExportVector = mozilla::Vector<ComponentExport, 0, SystemAllocPolicy>;
+  using AliasVector = mozilla::Vector<ComponentAlias, 0, SystemAllocPolicy>;
 
-  // JS API and JS::WasmComponent implementation:
-  JSObject* createObject(JSContext* cx) const override;
+ private:
+  CoreModuleVector definedCoreModules_;
+  CoreInstanceVector definedCoreInstances_;
+  TypeVector definedTypes_;
+  FuncVector definedFuncs_;
+  ImportVector imports_;
+  ExportVector exports_;
 
- public:
-  CoreModuleVector coreModules;
-  CoreInstanceVector coreInstances;
-  TypeVector types;
-  FuncVector funcs;
-  ImportVector imports;
-  ExportVector exports;
+  AliasVector funcs_;
+  AliasVector types_;
+  AliasVector components_;
+  AliasVector instances_;
+  AliasVector coreFuncs_;
+  AliasVector coreTables_;
+  AliasVector coreMemories_;
+  AliasVector coreGlobals_;
+  AliasVector coreTags_;
+  AliasVector coreTypes_;
+  AliasVector coreModules_;
+  AliasVector coreInstances_;
 
-  AliasVector
-      coreFuncs;  // TODO(wasm-cm): This will have to accommodate lowered funcs
-  AliasVector coreTables;
-  AliasVector coreMemories;
-  AliasVector coreGlobals;
-  AliasVector coreTags;
+  LifoAlloc stringStorage_;
+  mozilla::HashSet<ComponentString, NameHasher, SystemAllocPolicy>
+      stringInterner_;
 
-  const FuncType& typeForCoreFunc(uint32_t coreFuncIndex) {
-    const ComponentAlias& alias = coreFuncs[coreFuncIndex];
-    SharedModule mod = moduleForCoreInstance(alias.instanceIndex());
-    return mod->codeMeta().getFuncType(alias.itemIndex());
+  template <typename T>
+  bool addDefinedItem(T&& item,
+                      mozilla::Vector<T, 0, SystemAllocPolicy>& itemsVector,
+                      AliasVector& aliasVector) {
+    uint32_t index = itemsVector.length();
+    if (!itemsVector.append(std::forward<T>(item))) {
+      return false;
+    }
+    return aliasVector.append(ComponentAlias::defined(index));
   }
 
-  SharedModule moduleForCoreInstance(uint32_t instanceIndex) {
-    CoreInstanceDesc& instance = coreInstances[instanceIndex];
+ public:
+  Component() : stringStorage_(1024, js::MallocArena) {}
 
-    return instance.match(
-        [&coreModules = this->coreModules](CoreInstanceDescFromModule& desc) {
-          return coreModules[desc.moduleIndex];
-        },
-        [](CoreInstanceDescFromInlineExports& desc) { return desc.mod; });
+  [[nodiscard]] bool internString(mozilla::Span<const char> str,
+                                  ComponentString* out);
+
+  // --------------------------------------------------------------------------
+  // Accessors and adders for each index space
+
+  const ImportVector& imports() const { return imports_; }
+  [[nodiscard]] bool addImport(ComponentImport&& import,
+                               StronglyUniqueNameSet& nameDedup,
+                               bool* duplicate);
+
+  const ExportVector& exports() const { return exports_; }
+  [[nodiscard]] bool addExport(ComponentExport&& exp,
+                               StronglyUniqueNameSet& nameDedup,
+                               bool* duplicate);
+
+  const AliasVector& funcs() const { return funcs_; }
+  [[nodiscard]] bool addFunc(ComponentFuncDesc&& func) {
+    return addDefinedItem(std::move(func), definedFuncs_, funcs_);
+  }
+
+  const AliasVector& types() const { return types_; }
+  [[nodiscard]] bool addType(ComponentType&& type) {
+    MOZ_RELEASE_ASSERT(type.isValid());
+    return addDefinedItem(std::move(type), definedTypes_, types_);
+  }
+
+  // TODO(wasm-cm): Functions for components
+  // TODO(wasm-cm): Functions for component instances
+
+  const AliasVector& coreFuncs() const { return coreFuncs_; }
+  [[nodiscard]] bool addCoreFunc(ComponentAlias&& funcAlias) {
+    return coreFuncs_.append(std::move(funcAlias));
+  }
+
+  const AliasVector& coreTables() const { return coreTables_; }
+  [[nodiscard]] bool addCoreTable(ComponentAlias&& tableAlias) {
+    return coreTables_.append(std::move(tableAlias));
+  }
+
+  const AliasVector& coreMemories() const { return coreMemories_; }
+  [[nodiscard]] bool addCoreMemory(ComponentAlias&& memoryAlias) {
+    return coreMemories_.append(std::move(memoryAlias));
+  }
+
+  const AliasVector& coreGlobals() const { return coreGlobals_; }
+  [[nodiscard]] bool addCoreGlobal(ComponentAlias&& globalAlias) {
+    return coreGlobals_.append(std::move(globalAlias));
+  }
+
+  const AliasVector& coreTags() const { return coreTags_; }
+  bool addCoreTag(ComponentAlias&& tagAlias) {
+    return coreTags_.append(std::move(tagAlias));
+  }
+
+  const AliasVector& coreModules() const { return coreModules_; }
+  [[nodiscard]] bool addCoreModule(SharedModule module) {
+    return addDefinedItem(std::move(module), definedCoreModules_, coreModules_);
+  }
+
+  const AliasVector& coreInstances() const { return coreInstances_; }
+  [[nodiscard]] bool addCoreInstance(CoreInstanceDesc&& instance) {
+    return addDefinedItem(std::move(instance), definedCoreInstances_,
+                          coreInstances_);
+  }
+
+  // --------------------------------------------------------------------------
+  // Utilities for accessing type information
+
+  // Gets a type from the component's type index space. In many cases this may
+  // be a type bound, which is typically irrelevant to the task at hand, so
+  // consider calling `getResolvedType()` instead.
+  ComponentType getType(uint32_t typeIndex) const {
+    ComponentAlias alias = types_[typeIndex];
+    switch (alias.kind()) {
+      case ComponentAlias::Kind::Defined:
+        return definedTypes_[alias.itemIndex()];
+      case ComponentAlias::Kind::Import:
+        return imports_[alias.itemIndex()].externDesc().asType();
+      case ComponentAlias::Kind::Export:
+        return exports_[alias.itemIndex()].externDesc().asType();
+      case ComponentAlias::Kind::Alias:
+        MOZ_CRASH("should be impossible for now");
+      default:
+        MOZ_CRASH();
+    }
+  }
+
+  // Gets the type of a component func (not a core func). It is always safe to
+  // call `.asFunc()` on the result.
+  ComponentType getTypeForFunc(uint32_t funcIndex) const {
+    ComponentAlias alias = funcs_[funcIndex];
+    switch (alias.kind()) {
+      case ComponentAlias::Kind::Defined:
+        return getType(definedFuncs_[alias.itemIndex()].typeIndex());
+      case ComponentAlias::Kind::Import:
+        return imports_[alias.itemIndex()].externDesc().asFunc();
+      case ComponentAlias::Kind::Export:
+        return exports_[alias.itemIndex()].externDesc().asFunc();
+      case ComponentAlias::Kind::Alias:
+        MOZ_CRASH("should be impossible for now");
+      default:
+        MOZ_CRASH();
+    }
+  }
+
+  // Gets the type of a core func (not a component func).
+  const FuncType& getCoreFuncTypeForCoreFunc(uint32_t coreFuncIndex) const {
+    ComponentAlias alias = coreFuncs_[coreFuncIndex];
+    switch (alias.kind()) {
+      case ComponentAlias::Kind::Defined: {
+        // TODO(wasm-cm): Fix this when (canon lower) is supported.
+        MOZ_CRASH("should be impossible for now");
+      } break;
+      case ComponentAlias::Kind::Import:
+      case ComponentAlias::Kind::Export:
+        // Core funcs cannot be imported or exported
+        MOZ_CRASH();
+      case ComponentAlias::Kind::Alias: {
+        MOZ_ASSERT(alias.aliasKind() == ComponentAliasKind::CoreExport);
+        SharedModule mod =
+            getCoreModuleForCoreInstance(alias.aliasInstanceIndex());
+        uint32_t ft = mod->codeMeta().funcs[alias.itemIndex()].typeIndex;
+        return mod->codeMeta().types->type(ft).funcType();
+      } break;
+      default:
+        MOZ_CRASH();
+    }
+  }
+
+  SharedModule getCoreModule(uint32_t modIndex) const {
+    ComponentAlias alias = coreModules_[modIndex];
+    switch (alias.kind()) {
+      case ComponentAlias::Kind::Defined:
+        return definedCoreModules_[alias.itemIndex()];
+      case ComponentAlias::Kind::Import:
+        // TODO(wasm-cm): Fix when core module types are supported
+        MOZ_CRASH("should be impossible for now");
+      case ComponentAlias::Kind::Export: {
+        const ComponentExport& exp = exports_[alias.itemIndex()];
+        MOZ_ASSERT(exp.externDesc().sort() == ComponentSort::CoreModule);
+        return definedCoreModules_[exp.externDesc().asCoreModule()];
+      } break;
+      case ComponentAlias::Kind::Alias:
+        // TODO(wasm-cm): Fix when nested components are supported
+        MOZ_CRASH("should be impossible for now");
+      default:
+        MOZ_CRASH();
+    }
+  }
+
+  SharedModule getCoreModuleForCoreInstance(uint32_t instanceIndex) const {
+    ComponentAlias alias = coreInstances_[instanceIndex];
+    switch (alias.kind()) {
+      case ComponentAlias::Kind::Defined: {
+        const CoreInstanceDesc& instance =
+            definedCoreInstances_[alias.itemIndex()];
+        if (instance.is<CoreInstanceDescFromModule>()) {
+          return getCoreModule(
+              instance.as<CoreInstanceDescFromModule>().moduleIndex);
+        }
+        return instance.as<CoreInstanceDescFromInlineExports>().mod;
+      } break;
+      case ComponentAlias::Kind::Import:
+      case ComponentAlias::Kind::Export:
+        // Core instances cannot be imported or exported
+        MOZ_CRASH();
+      case ComponentAlias::Kind::Alias:
+        // TODO(wasm-cm): Fix once nested components are supported
+        MOZ_CRASH("should be impossible for now");
+      default:
+        MOZ_CRASH();
+    }
   }
 
   size_t gcMallocBytesExcludingCode() const {
@@ -564,7 +915,7 @@ class Component : public JS::WasmComponent {
     // modules, but this is not an accurate picture of a component's memory
     // footprint.
     size_t total = 0;
-    for (const SharedModule& module : coreModules) {
+    for (const SharedModule& module : definedCoreModules_) {
       total += module->gcMallocBytesExcludingCode();
     }
     return total;
@@ -574,11 +925,15 @@ class Component : public JS::WasmComponent {
     // TODO(wasm-cm): As above, this only sums up the memory for core modules,
     // and does not account for other potential code memory.
     size_t total = 0;
-    for (const SharedModule& module : coreModules) {
+    for (const SharedModule& module : definedCoreModules_) {
       total += module->tier1CodeMemoryUsed();
     }
     return total;
   }
+
+ private:
+  // JS API and JS::WasmComponent implementation:
+  JSObject* createObject(JSContext* cx) const override;
 };
 
 using MutableComponent = RefPtr<Component>;
