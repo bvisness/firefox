@@ -210,6 +210,14 @@ class CPUInfo {
     return avxPresent;
   }
 
+#ifdef ENABLE_APX_EXPERIMENT
+  static bool IsAPXPresent() {
+    MOZ_ASSERT(FlagsHaveBeenComputed());
+    MOZ_ASSERT_IF(!apxEnabled, !apxPresent);
+    return apxPresent;
+  }
+#endif
+
   static inline uint32_t GetFingerprint() {
     return GetSSEVersion() | (IsAVXPresent() ? AVX_PRESENT_BIT : 0);
   }
@@ -219,6 +227,11 @@ class CPUInfo {
   static SSEVersion maxEnabledSSEVersion;
   static bool avxPresent;
   static bool avxEnabled;
+#ifdef ENABLE_APX_EXPERIMENT
+  // Experimental: Intel APX is disabled by default and must be opted into.
+  static bool apxPresent;
+  static bool apxEnabled;
+#endif
   static bool popcntPresent;
   static bool bmi1Present;
   static bool bmi2Present;
@@ -292,6 +305,17 @@ class CPUInfo {
                "Can't enable AVX when SSE has been restricted");
     avxEnabled = true;
   }
+
+#ifdef ENABLE_APX_EXPERIMENT
+  static void SetAPXEnabled() {
+    MOZ_ASSERT(!FlagsHaveBeenComputed());
+    apxEnabled = true;
+  }
+  static void SetAPXDisabled() {
+    MOZ_ASSERT(!FlagsHaveBeenComputed());
+    apxEnabled = false;
+  }
+#endif
 };
 
 class AssemblerX86Shared : public AssemblerShared {
@@ -330,6 +354,11 @@ class AssemblerX86Shared : public AssemblerShared {
     if (!HasAVX()) {
       masm.disableVEX();
     }
+#ifdef ENABLE_APX_EXPERIMENT
+    if (HasAPX()) {
+      masm.enableAPX();
+    }
+#endif
   }
 
   enum Condition {
@@ -1214,6 +1243,9 @@ class AssemblerX86Shared : public AssemblerShared {
   static bool SupportsFloat32To16() { return CPUInfo::IsF16CPresent(); }
   static bool HasAVX() { return CPUInfo::IsAVXPresent(); }
   static bool HasAVX2() { return CPUInfo::IsAVX2Present(); }
+#ifdef ENABLE_APX_EXPERIMENT
+  static bool HasAPX() { return CPUInfo::IsAPXPresent(); }
+#endif
   static bool HasFMA() { return CPUInfo::IsFMAPresent(); }
 
   static bool HasRoundInstruction(RoundingMode mode) {

@@ -947,6 +947,34 @@ def wasm_avx(value, wasm_simd_enabled, simulator, target, no_experimental):
 set_config("ENABLE_WASM_AVX", wasm_avx)
 set_define("ENABLE_WASM_AVX", wasm_avx)
 
+# Experimental support for Intel APX (Advanced Performance Extensions)
+# =====================================================
+
+
+option(
+    "--enable-apx-experiment",
+    default=False,
+    help="Enable experimental Intel APX support in the x86_64 JIT backend",
+)
+
+
+@depends("--enable-apx-experiment", target, "--enable-simulator")
+def apx_experiment(value, target, simulator):
+    if not value:
+        return
+
+    if simulator:
+        die("--enable-apx-experiment is not supported for simulators")
+
+    if target.cpu == "x86_64":
+        return True
+
+    die("--enable-apx-experiment only possible when targeting the x86_64 jit")
+
+
+set_config("ENABLE_APX_EXPERIMENT", apx_experiment)
+set_define("ENABLE_APX_EXPERIMENT", apx_experiment)
+
 # Support for WebAssembly relaxed SIMD
 # =====================================================
 

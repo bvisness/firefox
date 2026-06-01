@@ -5482,6 +5482,18 @@ static bool IsAvxPresent(JSContext* cx, unsigned argc, Value* vp) {
   return true;
 }
 
+#ifdef ENABLE_APX_EXPERIMENT
+static bool IsApxPresent(JSContext* cx, unsigned argc, Value* vp) {
+  CallArgs args = CallArgsFromVp(argc, vp);
+#  ifdef JS_CODEGEN_X64
+  args.rval().setBoolean(jit::Assembler::HasAPX());
+#  else
+  args.rval().setBoolean(false);
+#  endif
+  return true;
+}
+#endif
+
 class ShellAllocationMetadataBuilder : public AllocationMetadataBuilder {
  public:
   ShellAllocationMetadataBuilder() = default;
@@ -10801,6 +10813,13 @@ gc::ZealModeHelpText),
 "isAvxPresent([minVersion])",
 "  Returns whether AVX is present and enabled. If minVersion specified,\n"
 "  use 1 - to check if AVX is enabled (default), 2 - if AVX2 is enabled."),
+
+#ifdef ENABLE_APX_EXPERIMENT
+    JS_FN_HELP("isApxPresent", IsApxPresent, 0, 0,
+"isApxPresent()",
+"  Returns whether experimental Intel APX support is present and enabled\n"
+"  (requires --enable-apx and APX-capable hardware or emulation)."),
+#endif
 
     JS_FN_HELP("wasmIsSupported", WasmIsSupported, 0, 0,
 "wasmIsSupported()",

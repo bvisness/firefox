@@ -217,6 +217,10 @@ bool CPUInfo::avxEnabled = true;
 #else
 bool CPUInfo::avxEnabled = false;
 #endif
+#ifdef ENABLE_APX_EXPERIMENT
+bool CPUInfo::apxPresent = false;
+bool CPUInfo::apxEnabled = false;
+#endif
 bool CPUInfo::popcntPresent = false;
 bool CPUInfo::bmi1Present = false;
 bool CPUInfo::bmi2Present = false;
@@ -282,6 +286,35 @@ static void ReadCPUInfo(int* flagsEax, int* flagsEbx, int* flagsEcx,
 #  error "Unsupported compiler"
 #endif
 }
+
+#ifdef ENABLE_APX_EXPERIMENT
+// Like ReadCPUInfo, but with an explicit CPUID subleaf (ECX input). ReadCPUInfo
+// always forces ECX=0, so it cannot read subleaf 1 where APX is enumerated.
+static void ReadCPUInfoSubleaf(int* flagsEax, int* flagsEbx, int* flagsEcx,
+                               int* flagsEdx, int subleaf) {
+#  ifdef _MSC_VER
+  int cpuinfo[4];
+  __cpuidex(cpuinfo, *flagsEax, subleaf);
+  *flagsEax = cpuinfo[0];
+  *flagsEbx = cpuinfo[1];
+  *flagsEcx = cpuinfo[2];
+  *flagsEdx = cpuinfo[3];
+#  elif defined(__GNUC__)
+  *flagsEcx = subleaf;
+#    ifdef JS_CODEGEN_X64
+  asm("cpuid;"
+      : "+a"(*flagsEax), "=b"(*flagsEbx), "+c"(*flagsEcx), "=d"(*flagsEdx));
+#    else
+  asm("mov %%ebx, %%edi;"
+      "cpuid;"
+      "xchg %%edi, %%ebx;"
+      : "+a"(*flagsEax), "=D"(*flagsEbx), "+c"(*flagsEcx), "=d"(*flagsEdx));
+#    endif
+#  else
+#    error "Unsupported compiler"
+#  endif
+}
+#endif
 
 void CPUInfo::ComputeFlags() {
   MOZ_ASSERT(!FlagsHaveBeenComputed());
@@ -378,6 +411,24 @@ void CPUInfo::ComputeFlags() {
   bmi1Present = avxSupported && (flagsEbx & BMI1Bit);
   bmi2Present = bmi1Present && (flagsEbx & BMI2Bit);
   avx2Present = avxPresent && (flagsEbx & AVX2Bit);
+
+#ifdef ENABLE_APX_EXPERIMENT
+  // Intel APX is enumerated in CPUID.(EAX=7,ECX=1):EDX[bit 21].
+  {
+    int apxEax = 0x7, apxEbx = 0, apxEcx = 0, apxEdx = 0;
+    ReadCPUInfoSubleaf(&apxEax, &apxEbx, &apxEcx, &apxEdx, /* subleaf = */ 1);
+    static constexpr int APXBit = 1 << 21;
+    apxPresent = (apxEdx & APXBit) && apxEnabled;
+
+    // The APX extended GPR state (r16-r31) must also be enabled by the OS,
+    // tracked by XCR0[bit 19] (APX_F).
+    if (apxPresent) {
+      size_t xcr0EAX = ReadXGETBV();
+      static constexpr int xcr0APXBit = 1 << 19;
+      apxPresent = (xcr0EAX & xcr0APXBit);
+    }
+  }
+#endif
 
   MOZ_ASSERT(FlagsHaveBeenComputed());
 }

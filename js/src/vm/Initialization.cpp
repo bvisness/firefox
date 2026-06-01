@@ -331,6 +331,16 @@ void JS::SetAVXEnabled(bool enabled) {
 }
 #endif
 
+#ifdef ENABLE_APX_EXPERIMENT
+void JS::SetAPXEnabled(bool enabled) {
+  if (enabled) {
+    js::jit::CPUInfo::SetAPXEnabled();
+  } else {
+    js::jit::CPUInfo::SetAPXDisabled();
+  }
+}
+#endif
+
 JS_PUBLIC_API void JS::DisableJitBackend() {
   MOZ_ASSERT(libraryInitState == InitState::Uninitialized,
              "DisableJitBackend must be called before JS_Init");

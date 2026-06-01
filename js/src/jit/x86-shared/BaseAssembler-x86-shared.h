@@ -48,6 +48,12 @@ class BaseAssembler : public GenericAssembler {
 
   void disableVEX() { useVEX_ = false; }
 
+#ifdef ENABLE_APX_EXPERIMENT
+  void enableAPX() { useAPX_ = true; }
+  void disableAPX() { useAPX_ = false; }
+  bool useAPX() const { return useAPX_; }
+#endif
+
   size_t size() const { return m_formatter.size(); }
   const unsigned char* buffer() const { return m_formatter.buffer(); }
   unsigned char* data() { return m_formatter.data(); }
@@ -6707,6 +6713,9 @@ class BaseAssembler : public GenericAssembler {
   } m_formatter;
 
   bool useVEX_;
+#ifdef ENABLE_APX_EXPERIMENT
+  bool useAPX_ = false;
+#endif
 };
 
 }  // namespace X86Encoding

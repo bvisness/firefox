@@ -13131,6 +13131,11 @@ bool InitOptionParser(OptionParser& op) {
       !op.addBoolOption('\0', "no-avx",
                         "No-op. AVX is currently disabled by default.") ||
 #endif
+#ifdef ENABLE_APX_EXPERIMENT
+      !op.addBoolOption('\0', "enable-apx",
+                        "Enable experimental Intel APX support "
+                        "(x64 only; disabled by default).") ||
+#endif
       !op.addBoolOption('\0', "no-fjcvtzs",
                         "Pretend CPU does not support FJCVTZS instruction.") ||
       !op.addBoolOption('\0', "no-cssc",
@@ -13565,6 +13570,14 @@ bool SetGlobalOptionsPreJSInit(const OptionParser& op) {
       return false;
     }
   }
+#  ifdef ENABLE_APX_EXPERIMENT
+  if (op.getBoolOption("enable-apx")) {
+    js::jit::CPUInfo::SetAPXEnabled();
+    if (!sCompilerProcessFlags.append("--enable-apx")) {
+      return false;
+    }
+  }
+#  endif
   if (op.getBoolOption("no-sse3")) {
     js::jit::CPUInfo::SetSSE3Disabled();
     if (!sCompilerProcessFlags.append("--no-sse3")) {

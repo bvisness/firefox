@@ -205,4 +205,12 @@ void SetAVXEnabled(bool enabled);
 }  // namespace JS
 #endif
 
+#ifdef ENABLE_APX_EXPERIMENT
+namespace JS {
+// Enable experimental support for Intel APX instructions in the x64 JIT
+// backend. Must be called before JS_Init*.
+void SetAPXEnabled(bool enabled);
+}  // namespace JS
+#endif
+
 #endif /* js_Initialization_h */
