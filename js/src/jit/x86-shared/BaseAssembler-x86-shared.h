@@ -52,6 +52,19 @@ class BaseAssembler : public GenericAssembler {
   void enableAPX() { useAPX_ = true; }
   void disableAPX() { useAPX_ = false; }
   bool useAPX() const { return useAPX_; }
+
+  // A GPR used as the VEX vvvv operand (e.g. the shift amount of shlx/sarx/shrx
+  // or the first source of andn) cannot be an APX extended register: VEX has no
+  // 5th vvvv bit, and worse, code r16 aliases the invalid_xmm sentinel (16) so
+  // it would be silently dropped rather than caught by threeOpVex's range
+  // assert. Guard it here until these ops are EVEX-promoted (Phase 3d).
+  static void checkVexVvvvGpr(RegisterID reg) {
+    MOZ_RELEASE_ASSERT(reg < X86Encoding::r16,
+                       "APX r16-r31 cannot be a VEX vvvv operand; this op "
+                       "needs EVEX promotion");
+  }
+#else
+  static void checkVexVvvvGpr(RegisterID) {}
 #endif
 
   size_t size() const { return m_formatter.size(); }
@@ -4610,6 +4623,7 @@ class BaseAssembler : public GenericAssembler {
          GPReg32Name(shift), GPReg32Name(dst));
 
     RegisterID rm = src;
+    checkVexVvvvGpr(shift);
     XMMRegisterID src0 = static_cast<XMMRegisterID>(shift);
     int reg = dst;
     m_formatter.threeByteOpVex(VEX_SS /* = F3 */, OP3_SARX_GyEyBy, ESCAPE_38,
@@ -4621,6 +4635,7 @@ class BaseAssembler : public GenericAssembler {
          GPReg32Name(shift), GPReg32Name(dst));
 
     RegisterID rm = src;
+    checkVexVvvvGpr(shift);
     XMMRegisterID src0 = static_cast<XMMRegisterID>(shift);
     int reg = dst;
     m_formatter.threeByteOpVex(VEX_PD /* = 66 */, OP3_SHLX_GyEyBy, ESCAPE_38,
@@ -4632,6 +4647,7 @@ class BaseAssembler : public GenericAssembler {
          GPReg32Name(shift), GPReg32Name(dst));
 
     RegisterID rm = src;
+    checkVexVvvvGpr(shift);
     XMMRegisterID src0 = static_cast<XMMRegisterID>(shift);
     int reg = dst;
     m_formatter.threeByteOpVex(VEX_SD /* = F2 */, OP3_SHRX_GyEyBy, ESCAPE_38,
@@ -4643,6 +4659,7 @@ class BaseAssembler : public GenericAssembler {
          GPReg32Name(src2), GPReg32Name(dst));
 
     RegisterID rm = src2;
+    checkVexVvvvGpr(src1);
     XMMRegisterID src0 = static_cast<XMMRegisterID>(src1);
     int reg = dst;
     m_formatter.threeByteOpVex(VEX_PS, OP3_ANDN_GyByEy, ESCAPE_38, rm, src0,
@@ -6790,6 +6807,20 @@ class BaseAssembler : public GenericAssembler {
       if (v == invalid_xmm) {
         v = XMMRegisterID(0);
       }
+
+#ifdef ENABLE_APX_EXPERIMENT
+      // The VEX prefix has no 5th register-id bit: callers pass r/x/b as (reg
+      // >> 3), so a valid operand (id 0-15) yields 0 or 1, and vvvv (v) is 4
+      // bits. An APX extended GPR (r16-r31) used as a VEX operand therefore
+      // yields r/x/b > 1 or v > 15 and would be silently mis-encoded. This
+      // happens when the allocator assigns r16-r31 to a value flowing through a
+      // VEX op with a GPR operand (vmovd/vmovq/vcvt* SSE<->GPR, BMI
+      // andn/bzhi/mulx, or a VEX memory base/index). Fail loudly until those
+      // ops are EVEX-promoted (Phase 3d).
+      MOZ_RELEASE_ASSERT(
+          r <= 1 && x <= 1 && b <= 1 && v <= 15,
+          "APX r16-r31 cannot be a VEX operand; this op needs EVEX promotion");
+#endif
 
       if (x == 0 && b == 0 && m == 1 && w == 0) {
         // Two byte VEX.

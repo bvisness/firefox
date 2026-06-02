@@ -232,6 +232,11 @@ bool CPUInfo::f16cPresent = false;
 namespace js {
 namespace jit {
 bool CPUFlagsHaveBeenComputed() { return CPUInfo::FlagsHaveBeenComputed(); }
+#ifdef ENABLE_APX_EXPERIMENT
+bool ApxRegistersAllocatable() {
+  return CPUInfo::FlagsHaveBeenComputed() && CPUInfo::IsAPXPresent();
+}
+#endif
 }  // namespace jit
 }  // namespace js
 

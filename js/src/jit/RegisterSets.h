@@ -11,6 +11,7 @@
 #include <new>
 #include <stddef.h>
 #include <stdint.h>
+#include <type_traits>
 
 #include "jit/IonTypes.h"
 #include "jit/Registers.h"
@@ -381,7 +382,20 @@ class TypedRegisterSet {
       : bits_(set.bits_) {}
 
   static inline TypedRegisterSet All() {
-    return TypedRegisterSet(T::Codes::AllocatableMask);
+    SetType bits = T::Codes::AllocatableMask;
+#if defined(JS_CODEGEN_X64) && defined(ENABLE_APX_EXPERIMENT)
+    // The APX extended GPRs r16-r31 are allocatable only when APX is available
+    // at runtime (their REX2/EVEX encodings would #UD otherwise). They are
+    // excluded from the static AllocatableMask so ad-hoc/static consumers never
+    // use them; add them here so the allocator and every All()-derived scratch
+    // pool agree on the set of assignable registers.
+    if constexpr (std::is_same_v<T, Register>) {
+      if (ApxRegistersAllocatable()) {
+        bits |= Registers::ApxExtendedGPRMask;
+      }
+    }
+#endif
+    return TypedRegisterSet(bits);
   }
   static inline TypedRegisterSet Intersect(const TypedRegisterSet& lhs,
                                            const TypedRegisterSet& rhs) {

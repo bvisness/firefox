@@ -35,6 +35,14 @@ static constexpr uint32_t ShadowStackSpace = 0;
 
 static const uint32_t JumpImmediateRange = INT32_MAX;
 
+#ifdef ENABLE_APX_EXPERIMENT
+// True once the CPU feature flags are computed and APX is available. Declared
+// here (and defined in Assembler-x86-shared.cpp) so the low-level register-set
+// headers can runtime-gate the APX extended GPRs without pulling in CPUInfo.
+// See TypedRegisterSet::All().
+bool ApxRegistersAllocatable();
+#endif
+
 class Registers {
  public:
   using Code = uint8_t;
@@ -60,8 +68,8 @@ class Registers {
 #  ifdef ENABLE_APX_EXPERIMENT
   // APX widens the GPR file to 32. SetType must hold one bit per register, so
   // it grows from uint16_t to uint32_t. The extended registers (r16-r31) are
-  // represented and encodable, but kept out of AllocatableMask until the
-  // allocator and trampoline/bailout paths are widened to track 32 GPRs.
+  // statically non-allocatable (NonAllocatableMask) but the Ion allocator adds
+  // them at runtime when APX is available; see TypedRegisterSet::All().
   using SetType = uint32_t;
 
   static const char* GetName(Code code) {
@@ -151,9 +159,19 @@ class Registers {
       (1 << X86Encoding::rdx) | (1 << X86Encoding::rcx) |
       (1 << X86Encoding::r8) | (1 << X86Encoding::r9);
 
-  static const SetType VolatileMask = (1 << X86Encoding::rax) | ArgRegMask |
-                                      (1 << X86Encoding::r10) |
-                                      (1 << X86Encoding::r11);
+#  ifdef ENABLE_APX_EXPERIMENT
+  // The APX extended GPRs r16-r31 (bits 16-31).
+  static const SetType ApxExtendedGPRMask = SetType(0xFFFF) << 16;
+#  endif
+
+  static const SetType VolatileMask =
+      (1 << X86Encoding::rax) | ArgRegMask | (1 << X86Encoding::r10) |
+      (1 << X86Encoding::r11)
+#  ifdef ENABLE_APX_EXPERIMENT
+      // r16-r31 are caller-saved (System V psABI).
+      | ApxExtendedGPRMask
+#  endif
+      ;
 
   static const SetType WrapperMask = VolatileMask;
 
@@ -163,10 +181,12 @@ class Registers {
       (1 << X86Encoding::rsp) | (1 << X86Encoding::rbp) |
       (1 << X86Encoding::r11)  // This is ScratchReg.
 #  ifdef ENABLE_APX_EXPERIMENT
-      // r16-r31 (bits 16-31): encodable via APX instructions, but not yet
-      // allocatable. Kept out of the allocator until PushRegsInMask, the
-      // trampoline RegisterDump, and Safepoints are widened to 32 GPRs.
-      | (SetType(0xFFFF) << 16)
+      // r16-r31 are non-allocatable by default, so ad-hoc scratch/temp
+      // selection and non-Ion backends never pick them. The Ion register
+      // allocator adds them to its working set at runtime when APX is available
+      // (see RegisterAllocator), so they are only ever used where the
+      // REX2-promoted encodings are valid.
+      | ApxExtendedGPRMask
 #  endif
       ;
 

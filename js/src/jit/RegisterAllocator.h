@@ -217,6 +217,10 @@ class RegisterAllocator {
 
   RegisterAllocator(MIRGenerator* mir, LIRGenerator* lir, LIRGraph& graph)
       : mir(mir), lir(lir), graph(graph), allRegisters_(RegisterSet::All()) {
+    // Note: under the APX experiment, RegisterSet::All() already
+    // runtime-includes the extended GPRs r16-r31 when APX is available (see
+    // TypedRegisterSet::All), so the allocator picks them up here
+    // automatically.
     MOZ_ASSERT(!allRegisters_.has(FramePointer));
     if (mir->compilingWasm()) {
       takeWasmRegisters(allRegisters_);
