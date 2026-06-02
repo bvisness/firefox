@@ -52,19 +52,6 @@ class BaseAssembler : public GenericAssembler {
   void enableAPX() { useAPX_ = true; }
   void disableAPX() { useAPX_ = false; }
   bool useAPX() const { return useAPX_; }
-
-  // A GPR used as the VEX vvvv operand (e.g. the shift amount of shlx/sarx/shrx
-  // or the first source of andn) cannot be an APX extended register: VEX has no
-  // 5th vvvv bit, and worse, code r16 aliases the invalid_xmm sentinel (16) so
-  // it would be silently dropped rather than caught by threeOpVex's range
-  // assert. Guard it here until these ops are EVEX-promoted (Phase 3d).
-  static void checkVexVvvvGpr(RegisterID reg) {
-    MOZ_RELEASE_ASSERT(reg < X86Encoding::r16,
-                       "APX r16-r31 cannot be a VEX vvvv operand; this op "
-                       "needs EVEX promotion");
-  }
-#else
-  static void checkVexVvvvGpr(RegisterID) {}
 #endif
 
   size_t size() const { return m_formatter.size(); }
@@ -4618,52 +4605,48 @@ class BaseAssembler : public GenericAssembler {
 
   // BMI instructions:
 
+  // Emit a 3-byte VEX op whose operands are all GPRs (BMI shlx/sarx/shrx/andn),
+  // promoting to EVEX (Fig 3.4) when any operand is an APX extended register so
+  // r16-r31 can be encoded; otherwise the plain VEX form. w = 1 for 64-bit.
+  void gprThreeByteOpVex(VexOperandType ty, ThreeByteOpcodeID opcode,
+                         ThreeByteEscape escape, RegisterID rm, RegisterID vvvv,
+                         RegisterID reg, int w) {
+#ifdef ENABLE_APX_EXPERIMENT
+    if (rm >= r16 || vvvv >= r16 || reg >= r16) {
+      m_formatter.threeByteOpEvexFromVex(ty, opcode, escape, rm, vvvv, reg, w);
+      return;
+    }
+#endif
+    m_formatter.threeByteOpVex(ty, opcode, escape, rm,
+                               static_cast<XMMRegisterID>(vvvv), reg);
+  }
+
   void sarxl_rrr(RegisterID src, RegisterID shift, RegisterID dst) {
     spew(currentOffset(), "sarxl      %s, %s, %s", GPReg32Name(src),
          GPReg32Name(shift), GPReg32Name(dst));
-
-    RegisterID rm = src;
-    checkVexVvvvGpr(shift);
-    XMMRegisterID src0 = static_cast<XMMRegisterID>(shift);
-    int reg = dst;
-    m_formatter.threeByteOpVex(VEX_SS /* = F3 */, OP3_SARX_GyEyBy, ESCAPE_38,
-                               rm, src0, reg);
+    gprThreeByteOpVex(VEX_SS /* = F3 */, OP3_SARX_GyEyBy, ESCAPE_38, src, shift,
+                      dst, /* w = */ 0);
   }
 
   void shlxl_rrr(RegisterID src, RegisterID shift, RegisterID dst) {
     spew(currentOffset(), "shlxl      %s, %s, %s", GPReg32Name(src),
          GPReg32Name(shift), GPReg32Name(dst));
-
-    RegisterID rm = src;
-    checkVexVvvvGpr(shift);
-    XMMRegisterID src0 = static_cast<XMMRegisterID>(shift);
-    int reg = dst;
-    m_formatter.threeByteOpVex(VEX_PD /* = 66 */, OP3_SHLX_GyEyBy, ESCAPE_38,
-                               rm, src0, reg);
+    gprThreeByteOpVex(VEX_PD /* = 66 */, OP3_SHLX_GyEyBy, ESCAPE_38, src, shift,
+                      dst, /* w = */ 0);
   }
 
   void shrxl_rrr(RegisterID src, RegisterID shift, RegisterID dst) {
     spew(currentOffset(), "shrxl      %s, %s, %s", GPReg32Name(src),
          GPReg32Name(shift), GPReg32Name(dst));
-
-    RegisterID rm = src;
-    checkVexVvvvGpr(shift);
-    XMMRegisterID src0 = static_cast<XMMRegisterID>(shift);
-    int reg = dst;
-    m_formatter.threeByteOpVex(VEX_SD /* = F2 */, OP3_SHRX_GyEyBy, ESCAPE_38,
-                               rm, src0, reg);
+    gprThreeByteOpVex(VEX_SD /* = F2 */, OP3_SHRX_GyEyBy, ESCAPE_38, src, shift,
+                      dst, /* w = */ 0);
   }
 
   void andnl_rrr(RegisterID src1, RegisterID src2, RegisterID dst) {
     spew(currentOffset(), "andnl      %s, %s, %s", GPReg32Name(src1),
          GPReg32Name(src2), GPReg32Name(dst));
-
-    RegisterID rm = src2;
-    checkVexVvvvGpr(src1);
-    XMMRegisterID src0 = static_cast<XMMRegisterID>(src1);
-    int reg = dst;
-    m_formatter.threeByteOpVex(VEX_PS, OP3_ANDN_GyByEy, ESCAPE_38, rm, src0,
-                               reg);
+    gprThreeByteOpVex(VEX_PS, OP3_ANDN_GyByEy, ESCAPE_38, src2, src1, dst,
+                      /* w = */ 0);
   }
 
   // FMA instructions:
@@ -6526,6 +6509,30 @@ class BaseAssembler : public GenericAssembler {
       return m_buffer.append(values, size);
     }
 
+#ifdef ENABLE_APX_EXPERIMENT
+    // Promote a 3-byte (0x0F38/0x0F3A) VEX op to EVEX so a GPR operand can be
+    // r16-r31 (used by BMI shlx/sarx/shrx/andn). rm = ModRM.rm GPR, vvvv = the
+    // VEX third GPR operand, reg = ModRM.reg GPR, w = 1 for 64-bit.
+    void threeByteOpEvexFromVex(VexOperandType ty, ThreeByteOpcodeID opcode,
+                                ThreeByteEscape escape, RegisterID rm, int vvvv,
+                                int reg, int w) {
+      int map = (escape == ESCAPE_3A) ? 3 : 2;
+      evexFromVex(ty, reg, /* x = */ 0, rm, map, w, vvvv, /* l = */ 0,
+                  /* nf = */ 0, opcode);
+      registerModRM(rm, reg);
+    }
+
+    // Promote a 2-byte (0x0F) VEX op to EVEX so a GPR operand can be r16-r31
+    // (used by vmovd/vmovq/vcvt* between a GPR and an XMM register). vvvv is 0
+    // for the two-operand moves.
+    void twoByteOpEvexFromVex(VexOperandType ty, TwoByteOpcodeID opcode,
+                              RegisterID rm, int vvvv, int reg, int w) {
+      evexFromVex(ty, reg, /* x = */ 0, rm, /* map = */ 1, w, vvvv, /* l = */ 0,
+                  /* nf = */ 0, opcode);
+      registerModRM(rm, reg);
+    }
+#endif
+
    private:
     // Internals; ModRm and REX formatters.
 
@@ -6835,6 +6842,42 @@ class BaseAssembler : public GenericAssembler {
 
       m_buffer.putByteUnchecked(opcode);
     }
+
+#ifdef ENABLE_APX_EXPERIMENT
+    // Emit the 4-byte APX extended-EVEX prefix that promotes a VEX instruction
+    // into the EVEX space (Intel APX spec sec 3.1.2.3.2, Figure 3.4), then the
+    // opcode. Unlike the legacy form, the map id is the VEX map (1 = 0F, 2 =
+    // 0F38, 3 = 0F3A), payload byte 2 carries the vector-length L (not ND), and
+    // the operand encoding is unchanged from VEX -- only the extra register-id
+    // bits are added, so a GPR operand can now be r16-r31. Register operands
+    // are full ids (0-31): reg = ModRM.reg, b = ModRM.rm/base, x = SIB.index,
+    // vvvv = the VEX third operand (pass 0 when unused; for BMI it is a GPR). p
+    // is the VEX pp (VexOperandType). Verified vs gas: `shlx r19,r17,r16` == 62
+    // ea fd 00 f7 d9, `vmovq xmm0,r16` == 62 f9 fd 08 6e c0.
+    void evexFromVex(VexOperandType p, int reg, int x, int b, int map, int w,
+                     int vvvv, int l, int nf, int opcode) {
+      m_buffer.ensureSpace(MaxInstructionSize);
+
+      uint8_t p0 = (((reg >> 3) & 1) << 7) | (((x >> 3) & 1) << 6) |
+                   (((b >> 3) & 1) << 5) | (((reg >> 4) & 1) << 4) |
+                   (((b >> 4) & 1) << 3) | (map & 7);
+      p0 ^= 0xF0;
+
+      uint8_t p1 = (uint8_t(w & 1) << 7) | ((vvvv & 0xF) << 3) |
+                   (((x >> 4) & 1) << 2) | (int(p) & 3);
+      p1 ^= 0x7C;
+
+      uint8_t p2 = (uint8_t(l & 1) << 5) | (((vvvv >> 4) & 1) << 3) |
+                   (uint8_t(nf & 1) << 2);
+      p2 ^= 0x08;
+
+      m_buffer.putByteUnchecked(PRE_EVEX);
+      m_buffer.putByteUnchecked(p0);
+      m_buffer.putByteUnchecked(p1);
+      m_buffer.putByteUnchecked(p2);
+      m_buffer.putByteUnchecked(opcode);
+    }
+#endif
 
 #ifdef ENABLE_APX_EXPERIMENT
     // Emit the 4-byte APX extended-EVEX prefix promoting a legacy instruction
