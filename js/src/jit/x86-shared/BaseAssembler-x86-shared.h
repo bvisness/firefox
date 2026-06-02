@@ -5804,8 +5804,7 @@ class BaseAssembler : public GenericAssembler {
 
     void twoByteRipOp(TwoByteOpcodeID opcode, int ripOffset, int reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
-      emitRexIfNeeded(reg, 0, 0);
-      m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
+      emitRexAndTwoByteEscape(false, reg, 0, 0);
       m_buffer.putByteUnchecked(opcode);
       putModRm(ModRmMemoryNoDisp, noBase, reg);
       m_buffer.putIntUnchecked(ripOffset);
@@ -5830,15 +5829,13 @@ class BaseAssembler : public GenericAssembler {
 
     void twoByteOp(TwoByteOpcodeID opcode, int reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
-      emitRexIfNeeded(0, 0, reg);
-      m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
+      emitRexAndTwoByteEscape(false, 0, 0, reg);
       m_buffer.putByteUnchecked(opcode + (reg & 7));
     }
 
     void twoByteOp(TwoByteOpcodeID opcode, RegisterID rm, int reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
-      emitRexIfNeeded(reg, 0, rm);
-      m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
+      emitRexAndTwoByteEscape(false, reg, 0, rm);
       m_buffer.putByteUnchecked(opcode);
       registerModRM(rm, reg);
     }
@@ -5855,8 +5852,7 @@ class BaseAssembler : public GenericAssembler {
     void twoByteOp(TwoByteOpcodeID opcode, int32_t offset, RegisterID base,
                    int reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
-      emitRexIfNeeded(reg, 0, base);
-      m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
+      emitRexAndTwoByteEscape(false, reg, 0, base);
       m_buffer.putByteUnchecked(opcode);
       memoryModRM(offset, base, reg);
     }
@@ -5873,8 +5869,7 @@ class BaseAssembler : public GenericAssembler {
     void twoByteOp_disp32(TwoByteOpcodeID opcode, int32_t offset,
                           RegisterID base, int reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
-      emitRexIfNeeded(reg, 0, base);
-      m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
+      emitRexAndTwoByteEscape(false, reg, 0, base);
       m_buffer.putByteUnchecked(opcode);
       memoryModRM_disp32(offset, base, reg);
     }
@@ -5892,8 +5887,7 @@ class BaseAssembler : public GenericAssembler {
     void twoByteOp(TwoByteOpcodeID opcode, int32_t offset, RegisterID base,
                    RegisterID index, int scale, int reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
-      emitRexIfNeeded(reg, index, base);
-      m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
+      emitRexAndTwoByteEscape(false, reg, index, base);
       m_buffer.putByteUnchecked(opcode);
       memoryModRM(offset, base, index, scale, reg);
     }
@@ -5910,8 +5904,7 @@ class BaseAssembler : public GenericAssembler {
 
     void twoByteOp(TwoByteOpcodeID opcode, const void* address, int reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
-      emitRexIfNeeded(reg, 0, 0);
-      m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
+      emitRexAndTwoByteEscape(false, reg, 0, 0);
       m_buffer.putByteUnchecked(opcode);
       memoryModRM(address, reg);
     }
@@ -5928,6 +5921,7 @@ class BaseAssembler : public GenericAssembler {
     void threeByteOp(ThreeByteOpcodeID opcode, ThreeByteEscape escape,
                      RegisterID rm, int reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
+      assertNoRex2(reg, 0, rm);
       emitRexIfNeeded(reg, 0, rm);
       m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
       m_buffer.putByteUnchecked(escape);
@@ -5957,6 +5951,7 @@ class BaseAssembler : public GenericAssembler {
     void threeByteOp(ThreeByteOpcodeID opcode, ThreeByteEscape escape,
                      int32_t offset, RegisterID base, int reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
+      assertNoRex2(reg, 0, base);
       emitRexIfNeeded(reg, 0, base);
       m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
       m_buffer.putByteUnchecked(escape);
@@ -5968,6 +5963,7 @@ class BaseAssembler : public GenericAssembler {
                      int32_t offset, RegisterID base, RegisterID index,
                      int32_t scale, int reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
+      assertNoRex2(reg, index, base);
       emitRexIfNeeded(reg, index, base);
       m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
       m_buffer.putByteUnchecked(escape);
@@ -6017,6 +6013,7 @@ class BaseAssembler : public GenericAssembler {
     void threeByteOp(ThreeByteOpcodeID opcode, ThreeByteEscape escape,
                      const void* address, int reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
+      assertNoRex2(reg, 0, 0);
       emitRexIfNeeded(reg, 0, 0);
       m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
       m_buffer.putByteUnchecked(escape);
@@ -6027,6 +6024,7 @@ class BaseAssembler : public GenericAssembler {
     void threeByteRipOp(ThreeByteOpcodeID opcode, ThreeByteEscape escape,
                         int ripOffset, int reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
+      assertNoRex2(reg, 0, 0);
       emitRexIfNeeded(reg, 0, 0);
       m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
       m_buffer.putByteUnchecked(escape);
@@ -6195,15 +6193,13 @@ class BaseAssembler : public GenericAssembler {
 
     void twoByteOp64(TwoByteOpcodeID opcode, int reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
-      emitRexW(0, 0, reg);
-      m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
+      emitRexAndTwoByteEscape(true, 0, 0, reg);
       m_buffer.putByteUnchecked(opcode + (reg & 7));
     }
 
     void twoByteOp64(TwoByteOpcodeID opcode, RegisterID rm, int reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
-      emitRexW(reg, 0, rm);
-      m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
+      emitRexAndTwoByteEscape(true, reg, 0, rm);
       m_buffer.putByteUnchecked(opcode);
       registerModRM(rm, reg);
     }
@@ -6211,8 +6207,7 @@ class BaseAssembler : public GenericAssembler {
     void twoByteOp64(TwoByteOpcodeID opcode, int offset, RegisterID base,
                      int reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
-      emitRexW(reg, 0, base);
-      m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
+      emitRexAndTwoByteEscape(true, reg, 0, base);
       m_buffer.putByteUnchecked(opcode);
       memoryModRM(offset, base, reg);
     }
@@ -6220,16 +6215,14 @@ class BaseAssembler : public GenericAssembler {
     void twoByteOp64(TwoByteOpcodeID opcode, int offset, RegisterID base,
                      RegisterID index, int scale, int reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
-      emitRexW(reg, index, base);
-      m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
+      emitRexAndTwoByteEscape(true, reg, index, base);
       m_buffer.putByteUnchecked(opcode);
       memoryModRM(offset, base, index, scale, reg);
     }
 
     void twoByteOp64(TwoByteOpcodeID opcode, const void* address, int reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
-      emitRexW(reg, 0, 0);
-      m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
+      emitRexAndTwoByteEscape(true, reg, 0, 0);
       m_buffer.putByteUnchecked(opcode);
       memoryModRM(address, reg);
     }
@@ -6246,6 +6239,7 @@ class BaseAssembler : public GenericAssembler {
     void threeByteOp64(ThreeByteOpcodeID opcode, ThreeByteEscape escape,
                        RegisterID rm, int reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
+      assertNoRex2(reg, 0, rm);
       emitRexW(reg, 0, rm);
       m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
       m_buffer.putByteUnchecked(escape);
@@ -6358,8 +6352,8 @@ class BaseAssembler : public GenericAssembler {
 
     void twoByteOp8(TwoByteOpcodeID opcode, RegisterID rm, RegisterID reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
-      emitRexIf(byteRegRequiresRex(reg) || byteRegRequiresRex(rm), reg, 0, rm);
-      m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
+      emitRexIfAndTwoByteEscape(
+          byteRegRequiresRex(reg) || byteRegRequiresRex(rm), reg, 0, rm);
       m_buffer.putByteUnchecked(opcode);
       registerModRM(rm, reg);
     }
@@ -6367,8 +6361,8 @@ class BaseAssembler : public GenericAssembler {
     void twoByteOp8(TwoByteOpcodeID opcode, int32_t offset, RegisterID base,
                     RegisterID reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
-      emitRexIf(byteRegRequiresRex(reg) || regRequiresRex(base), reg, 0, base);
-      m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
+      emitRexIfAndTwoByteEscape(byteRegRequiresRex(reg) || regRequiresRex(base),
+                                reg, 0, base);
       m_buffer.putByteUnchecked(opcode);
       memoryModRM(offset, base, reg);
     }
@@ -6376,10 +6370,10 @@ class BaseAssembler : public GenericAssembler {
     void twoByteOp8(TwoByteOpcodeID opcode, int32_t offset, RegisterID base,
                     RegisterID index, int scale, RegisterID reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
-      emitRexIf(byteRegRequiresRex(reg) || regRequiresRex(base) ||
-                    regRequiresRex(index),
-                reg, index, base);
-      m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
+      emitRexIfAndTwoByteEscape(byteRegRequiresRex(reg) ||
+                                    regRequiresRex(base) ||
+                                    regRequiresRex(index),
+                                reg, index, base);
       m_buffer.putByteUnchecked(opcode);
       memoryModRM(offset, base, index, scale, reg);
     }
@@ -6391,8 +6385,8 @@ class BaseAssembler : public GenericAssembler {
     void twoByteOp8_movx(TwoByteOpcodeID opcode, RegisterID rm,
                          RegisterID reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
-      emitRexIf(regRequiresRex(reg) || byteRegRequiresRex(rm), reg, 0, rm);
-      m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
+      emitRexIfAndTwoByteEscape(regRequiresRex(reg) || byteRegRequiresRex(rm),
+                                reg, 0, rm);
       m_buffer.putByteUnchecked(opcode);
       registerModRM(rm, reg);
     }
@@ -6400,8 +6394,7 @@ class BaseAssembler : public GenericAssembler {
     void twoByteOp8(TwoByteOpcodeID opcode, RegisterID rm,
                     GroupOpcodeID groupOp) {
       m_buffer.ensureSpace(MaxInstructionSize);
-      emitRexIf(byteRegRequiresRex(rm), 0, 0, rm);
-      m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
+      emitRexIfAndTwoByteEscape(byteRegRequiresRex(rm), 0, 0, rm);
       m_buffer.putByteUnchecked(opcode);
       registerModRM(rm, groupOp);
     }
@@ -6538,6 +6531,29 @@ class BaseAssembler : public GenericAssembler {
 #endif
     }
 
+#ifdef ENABLE_APX_EXPERIMENT
+    // The APX extended GPRs r16-r31 require the 5th register-id bit, which only
+    // the REX2 (or EVEX) prefix can encode. A legacy REX prefix would silently
+    // drop it.
+    static bool regRequiresRex2(int reg) { return reg >= X86Encoding::r16; }
+    static bool anyRequiresRex2(int r, int x, int b) {
+      return regRequiresRex2(r) || regRequiresRex2(x) || regRequiresRex2(b);
+    }
+    // Guard for opcode-map paths that cannot carry a REX2 prefix (the
+    // 0x0F38/0x0F3A three-byte maps; REX2 only reaches maps 0 and 1). If the
+    // register allocator ever feeds a high GPR to one of these, fail loudly
+    // rather than silently mis-encoding. Such ops would need an EVEX encoding
+    // to support r16-r31.
+    void assertNoRex2(int r, int x, int b) {
+      MOZ_ASSERT(
+          !anyRequiresRex2(r, x, b),
+          "APX r16-r31 reached an opcode map (0x0F38/0x0F3A) with no REX2 "
+          "encoding; this instruction needs an APX/EVEX form");
+    }
+#else
+    void assertNoRex2(int, int, int) {}
+#endif
+
 #ifdef JS_CODEGEN_X64
     // Format a REX prefix byte.
     void emitRex(bool w, int r, int x, int b) {
@@ -6545,8 +6561,30 @@ class BaseAssembler : public GenericAssembler {
                                 ((x >> 3) << 1) | (b >> 3));
     }
 
+#  ifdef ENABLE_APX_EXPERIMENT
+    // Format a 2-byte REX2 prefix (Intel APX spec sec 3.1.2.1, Figure 3.1). The
+    // second byte is [M0 R4 X4 B4 W R3 X3 B3] (not inverted). m0 selects the
+    // opcode map: 0 for legacy one-byte opcodes, 1 for the 0x0F two-byte map
+    // (in which case the 0x0F escape must NOT be emitted separately).
+    void emitRex2(bool w, int r, int x, int b, bool m0) {
+      m_buffer.putByteUnchecked(PRE_REX2);
+      m_buffer.putByteUnchecked((int(m0) << 7) | (((r >> 4) & 1) << 6) |
+                                (((x >> 4) & 1) << 5) | (((b >> 4) & 1) << 4) |
+                                (int(w) << 3) | (((r >> 3) & 1) << 2) |
+                                (((x >> 3) & 1) << 1) | ((b >> 3) & 1));
+    }
+#  endif
+
     // Used to plant a REX byte with REX.w set (for 64-bit operations).
-    void emitRexW(int r, int x, int b) { emitRex(true, r, x, b); }
+    void emitRexW(int r, int x, int b) {
+#  ifdef ENABLE_APX_EXPERIMENT
+      if (anyRequiresRex2(r, x, b)) {
+        emitRex2(true, r, x, b, /* m0 = */ false);
+        return;
+      }
+#  endif
+      emitRex(true, r, x, b);
+    }
 
     // Used for operations with byte operands - use byteRegRequiresRex() to
     // check register operands, regRequiresRex() to check other registers
@@ -6557,6 +6595,12 @@ class BaseAssembler : public GenericAssembler {
     // oneByteOp8 and twoByteOp8 functionality such that r, x, and b
     // can all be used.
     void emitRexIf(bool condition, int r, int x, int b) {
+#  ifdef ENABLE_APX_EXPERIMENT
+      if (anyRequiresRex2(r, x, b)) {
+        emitRex2(false, r, x, b, /* m0 = */ false);
+        return;
+      }
+#  endif
       if (condition || regRequiresRex(RegisterID(r)) ||
           regRequiresRex(RegisterID(x)) || regRequiresRex(RegisterID(b))) {
         emitRex(false, r, x, b);
@@ -6566,12 +6610,52 @@ class BaseAssembler : public GenericAssembler {
     // Used for word sized operations, will plant a REX prefix if necessary
     // (if any register is r8 or above).
     void emitRexIfNeeded(int r, int x, int b) { emitRexIf(false, r, x, b); }
+
+    // Prefix emission for two-byte (0x0F map) opcodes, used in place of an
+    // emitRex*() call followed by a separate OP_2BYTE_ESCAPE byte. Under APX,
+    // when a high register forces a REX2 prefix the 0x0F escape is folded into
+    // REX2 (M0 = 1) and must NOT be emitted separately; otherwise this emits a
+    // legacy REX (if needed) followed by the 0x0F escape, exactly as before.
+    void emitRexAndTwoByteEscape(bool w, int r, int x, int b) {
+#  ifdef ENABLE_APX_EXPERIMENT
+      if (anyRequiresRex2(r, x, b)) {
+        emitRex2(w, r, x, b, /* m0 = */ true);
+        return;
+      }
+#  endif
+      if (w) {
+        emitRexW(r, x, b);
+      } else {
+        emitRexIfNeeded(r, x, b);
+      }
+      m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
+    }
+
+    // As emitRexAndTwoByteEscape, but takes an explicit "force a legacy REX"
+    // condition (for byte operations that need REX to reach spl/bpl/sil/dil). A
+    // high register still forces REX2 regardless of the condition.
+    void emitRexIfAndTwoByteEscape(bool condition, int r, int x, int b) {
+#  ifdef ENABLE_APX_EXPERIMENT
+      if (anyRequiresRex2(r, x, b)) {
+        emitRex2(false, r, x, b, /* m0 = */ true);
+        return;
+      }
+#  endif
+      emitRexIf(condition, r, x, b);
+      m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
+    }
 #else
     // No REX prefix bytes on 32-bit x86.
     void emitRexIf(bool condition, int, int, int) {
       MOZ_ASSERT(!condition, "32-bit x86 should never use a REX prefix");
     }
     void emitRexIfNeeded(int, int, int) {}
+    void emitRexAndTwoByteEscape(bool, int, int, int) {
+      m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
+    }
+    void emitRexIfAndTwoByteEscape(bool, int, int, int) {
+      m_buffer.putByteUnchecked(OP_2BYTE_ESCAPE);
+    }
 #endif
 
     void putModRm(ModRmMode mode, RegisterID rm, int reg) {

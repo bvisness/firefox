@@ -468,6 +468,18 @@ void MacroAssembler::PushRegsInMask(LiveRegisterSet set) {
   // on modern hardware and it's a small instruction.
   for (GeneralRegisterBackwardIterator iter(set.gprs()); iter.more(); ++iter) {
     diffG -= sizeof(intptr_t);
+#ifdef ENABLE_APX_EXPERIMENT
+    if ((*iter).encoding() >= X86Encoding::r16) {
+      // The APX extended GPRs r16-r31 are not allocatable yet, so they never
+      // hold a live value. Reserve their RegisterDump slot to keep the dump
+      // layout (which is indexed by register code) intact, but don't emit a
+      // real push: pushing r16-r31 requires a REX2 prefix that would #UD on
+      // non-APX hosts. Phase 3c will push them for real, gated on runtime APX
+      // availability.
+      reserveStack(sizeof(intptr_t));
+      continue;
+    }
+#endif
     Push(*iter);
   }
   MOZ_ASSERT(diffG == 0);
@@ -602,12 +614,27 @@ void MacroAssembler::PopRegsInMaskIgnore(LiveRegisterSet set,
   if (ignore.emptyGeneral()) {
     for (GeneralRegisterForwardIterator iter(set.gprs()); iter.more(); ++iter) {
       diffG -= sizeof(intptr_t);
+#ifdef ENABLE_APX_EXPERIMENT
+      if ((*iter).encoding() >= X86Encoding::r16) {
+        // Mirror PushRegsInMask: r16-r31 only reserved a slot, so free it
+        // rather than emitting a REX2 pop (see PushRegsInMask for the
+        // rationale).
+        freeStack(sizeof(intptr_t));
+        continue;
+      }
+#endif
       Pop(*iter);
     }
   } else {
     for (GeneralRegisterBackwardIterator iter(set.gprs()); iter.more();
          ++iter) {
       diffG -= sizeof(intptr_t);
+#ifdef ENABLE_APX_EXPERIMENT
+      if ((*iter).encoding() >= X86Encoding::r16) {
+        continue;  // Slot was only reserved; freed below by
+                   // freeStack(reservedG).
+      }
+#endif
       if (!ignore.has(*iter)) {
         loadPtr(Address(StackPointer, diffG), *iter);
       }

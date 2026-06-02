@@ -156,4 +156,78 @@ BEGIN_TEST(testApxEvex_ndd_execute) {
 }
 END_TEST(testApxEvex_ndd_execute)
 
+// Byte spot-check that legacy GPR ops gain a REX2 prefix when an extended
+// register (r16-r31) is used. push/pop are map-0 ops whose encoding is
+// unambiguous; the reference bytes are from GNU as 2.42.
+BEGIN_TEST(testApxRex2_pushpop_encoding) {
+  TempAllocator tempAlloc(&cx->tempLifoAlloc());
+  JitContext jcx(cx);
+  StackMacroAssembler masm(cx, tempAlloc);
+  AutoCreatedBy acb(masm, __func__);
+
+  masm.push(r16);  // d5 10 50
+  masm.pop(r17);   // d5 10 59
+  masm.push(r31);  // d5 11 57
+  masm.pop(r8);    // 41 58  (legacy REX, no REX2 needed)
+
+  CHECK(!masm.oom());
+  Linker linker(masm);
+  JitCode* code = linker.newCode(cx, CodeKind::Other);
+  CHECK(code);
+
+  static const uint8_t expected[] = {
+      0xd5, 0x10, 0x50,  // push r16
+      0xd5, 0x10, 0x59,  // pop r17
+      0xd5, 0x11, 0x57,  // push r31
+      0x41, 0x58,        // pop r8
+  };
+  CHECK(code->instructionsSize() >= sizeof(expected));
+  CHECK(memcmp(code->raw(), expected, sizeof(expected)) == 0);
+  return true;
+}
+END_TEST(testApxRex2_pushpop_encoding)
+
+// Execute a chain of ordinary GPR ops (mov-immediate, mov reg-reg, add,
+// push/pop, load/store) using extended registers r16-r23, confirming the
+// REX2-promoted legacy encodings run correctly. Requires APX (skipped
+// otherwise).
+BEGIN_TEST(testApxRex2_execute) {
+  if (!CPUInfo::IsAPXPresent()) {
+    return true;  // Skip: no APX on this host.
+  }
+
+  TempAllocator tempAlloc(&cx->tempLifoAlloc());
+  JitContext jcx(cx);
+  StackMacroAssembler masm(cx, tempAlloc);
+  AutoCreatedBy acb(masm, __func__);
+
+  uint64_t out[3] = {};
+  uint64_t scratch = 0;
+
+  PrepareJit(masm);
+  masm.movePtr(ImmWord(0x1111), r16);  // mov-immediate into high reg
+  masm.movePtr(ImmWord(0x2222), r17);
+  masm.movePtr(r16, r18);  // mov reg-reg (high <- high)
+  masm.addPtr(r17, r18);   // r18 = 0x3333 (2-operand add, high regs)
+  masm.storePtr(r18, AbsoluteAddress(&out[0]));
+
+  // Round-trip a high register through memory (store + load).
+  masm.storePtr(r16, AbsoluteAddress(&scratch));
+  masm.loadPtr(AbsoluteAddress(&scratch), r19);
+  masm.storePtr(r19, AbsoluteAddress(&out[1]));
+
+  // push/pop a high register.
+  masm.push(r16);
+  masm.pop(r20);
+  masm.storePtr(r20, AbsoluteAddress(&out[2]));
+
+  CHECK(ExecuteJit(cx, masm));
+
+  CHECK(out[0] == 0x3333);
+  CHECK(out[1] == 0x1111);
+  CHECK(out[2] == 0x1111);
+  return true;
+}
+END_TEST(testApxRex2_execute)
+
 #endif  // defined(ENABLE_APX_EXPERIMENT) && defined(JS_CODEGEN_X64)
