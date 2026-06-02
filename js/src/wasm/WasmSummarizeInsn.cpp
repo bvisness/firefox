@@ -124,10 +124,14 @@ Maybe<TrapMachineInsn> SummarizeTrapInstruction(const uint8_t* insn) {
     bool l = (p2 >> 5) & 1;
     if (mmm >= 1 && mmm <= 3) {
       // EVEX promotion of a VEX instruction: rebuild a 3-byte VEX prefix
-      // (R/X/B and vvvv are irrelevant to trapsite classification).
+      // (R/X/B and vvvv are irrelevant to trapsite classification). W is
+      // dropped: the matchers below are written for the WIG VEX forms and
+      // require REX.W unset, whereas the EVEX form may pin W=1 (e.g. vmovsd).
+      // Trap classification (load/store size) comes from the opcode and pp, not
+      // W, so forcing W=0 here keeps those matchers working.
       norm[k++] = 0xC4;
       norm[k++] = 0xE0 | mmm;
-      norm[k++] = (w ? 0x80 : 0) | 0x78 | (l ? 0x04 : 0) | pp;
+      norm[k++] = 0x78 | (l ? 0x04 : 0) | pp;
     } else {
       // map 4 (legacy-promoted NDD): rebuild legacy prefixes only.
       if (pp == 1) {

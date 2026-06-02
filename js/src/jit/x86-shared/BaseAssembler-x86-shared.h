@@ -6702,10 +6702,22 @@ class BaseAssembler : public GenericAssembler {
     }
 
     void registerModRM(RegisterID rm, int reg) {
+#ifdef ENABLE_APX_EXPERIMENT
+      // A register operand has no displacement; clear the EVEX disp32 request
+      // so it cannot leak to a later memory operand.
+      m_evexNeedsDisp32 = false;
+#endif
       putModRm(ModRmRegister, rm, reg);
     }
 
     void memoryModRM(int32_t offset, RegisterID base, int reg) {
+#ifdef ENABLE_APX_EXPERIMENT
+      if (m_evexNeedsDisp32) {
+        m_evexNeedsDisp32 = false;
+        memoryModRM_disp32(offset, base, reg);
+        return;
+      }
+#endif
       // A base of esp or r12 would be interpreted as a sib, so force a
       // sib with no index & put the base in there.
 #ifdef JS_CODEGEN_X64
@@ -6762,9 +6774,28 @@ class BaseAssembler : public GenericAssembler {
       }
     }
 
+#ifdef ENABLE_APX_EXPERIMENT
+    // disp32 form of the base+index memoryModRM (forces a 32-bit displacement,
+    // which EVEX leaves unscaled). Used for EVEX-promoted memory operands.
+    void memoryModRM_disp32(int32_t offset, RegisterID base, RegisterID index,
+                            int scale, int reg) {
+      MOZ_ASSERT(index != noIndex);
+      putModRmSib(ModRmMemoryDisp32, base, index, scale, reg);
+      m_buffer.putIntUnchecked(offset);
+    }
+#endif
+
     void memoryModRM(int32_t offset, RegisterID base, RegisterID index,
                      int scale, int reg) {
       MOZ_ASSERT(index != noIndex);
+
+#ifdef ENABLE_APX_EXPERIMENT
+      if (m_evexNeedsDisp32) {
+        m_evexNeedsDisp32 = false;
+        memoryModRM_disp32(offset, base, index, scale, reg);
+        return;
+      }
+#endif
 
 #ifdef JS_CODEGEN_X64
       // (base & 7) == rbp forces a displacement (mod != 00) so the SIB base
@@ -6870,9 +6901,29 @@ class BaseAssembler : public GenericAssembler {
 #ifdef ENABLE_APX_EXPERIMENT
       if (anyRequiresRex2(reg, x, b)) {
         int v = (vvvv == invalid_xmm) ? 0 : vvvv;
-        evexFromVex(ty, reg, x, b, map, w, v, l, /* nf = */ 0, opcode);
+        // EVEX pins the W bit per instruction, but several VEX SSE moves are
+        // WIG and are emitted here with w=0. The scalar/packed *double* moves
+        // are EVEX.W1 (vmovsd = F2.0F.W1 10/11, vmovupd = 66.0F.W1 10/11,
+        // vmovapd = 66.0F.W1 28/29); emitting W0 produces an invalid EVEX
+        // (objdump: "vmovs{bad}"), corrupting an r16-r31-indexed f64 load.
+        // Correct W only for the EVEX form so the VEX (host) encoding is
+        // unchanged. (Single-precision / integer / packed-int moves stay W0.)
+        int ew = w;
+        if (map == 1 && ((ty == VEX_SD && (opcode == 0x10 || opcode == 0x11)) ||
+                         (ty == VEX_PD &&
+                          (opcode == 0x10 || opcode == 0x11 || opcode == 0x28 ||
+                           opcode == 0x29 || opcode == 0xD6)) ||
+                         (ty == VEX_SS && opcode == 0x7E))) {
+          // vmovsd/vmovupd/vmovapd, plus the scalar 64-bit moves vmovq (store =
+          // 66.0F.W1 D6, load = F3.0F.W1 7E): all EVEX.W1. Emitting W0
+          // truncates a 64-bit move / yields an invalid encoding.
+          ew = 1;
+        }
+        m_evexNeedsDisp32 = true;
+        evexFromVex(ty, reg, x, b, map, ew, v, l, /* nf = */ 0, opcode);
         return;
       }
+      m_evexNeedsDisp32 = false;
 #endif
       threeOpVex(ty, reg >> 3, x >> 3, b >> 3, map, w, vvvv, l, opcode);
     }
@@ -6953,6 +7004,16 @@ class BaseAssembler : public GenericAssembler {
       m_buffer.putByteUnchecked(p2);
       m_buffer.putByteUnchecked(opcode);
     }
+#endif
+
+#ifdef ENABLE_APX_EXPERIMENT
+    // Set by vexOrEvexPrefix when it emits the EVEX (rather than VEX) form, and
+    // consumed by the immediately-following registerModRM/memoryModRM. EVEX
+    // scales a disp8 by the instruction's tuple size N, but our memory emitters
+    // pass a raw byte displacement, so an EVEX-promoted memory operand must use
+    // disp32 (which EVEX does not scale) instead of disp8. disp0 is unaffected
+    // (no displacement byte) and disp32 is already raw.
+    bool m_evexNeedsDisp32 = false;
 #endif
 
     x86_shared::AssemblerBuffer m_buffer;
