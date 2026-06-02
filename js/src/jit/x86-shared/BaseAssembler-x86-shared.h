@@ -5842,23 +5842,9 @@ class BaseAssembler : public GenericAssembler {
 
     void twoByteOpVex(VexOperandType ty, TwoByteOpcodeID opcode, RegisterID rm,
                       XMMRegisterID src0, int reg) {
-#ifdef ENABLE_APX_EXPERIMENT
-      // SSE<->GPR ops (vmovd/vmovq/vcvt*) reach here with a GPR in rm or reg;
-      // an XMM operand has code 0-15, so rm/reg >= r16 means a high GPR that
-      // VEX can't encode. Promote to EVEX (Fig 3.4). vvvv (src0) is XMM or
-      // invalid here.
-      if (rm >= r16 || reg >= int(r16)) {
-        int v = (src0 == invalid_xmm) ? 0 : int(src0);
-        evexFromVex(ty, reg, /* x = */ 0, rm, /* map = */ 1, /* w = */ 0, v,
-                    /* l = */ 0, /* nf = */ 0, opcode);
-        registerModRM(rm, reg);
-        return;
-      }
-#endif
-      int r = (reg >> 3), x = 0, b = (rm >> 3);
-      int m = 1;  // 0x0F
-      int w = 0, v = src0, l = 0;
-      threeOpVex(ty, r, x, b, m, w, v, l, opcode);
+      vexOrEvexPrefix(ty, reg, /* x = */ 0, rm, /* map = */ 1, /* w = */ 0,
+                      src0,
+                      /* l = */ 0, opcode);
       registerModRM(rm, reg);
     }
 
@@ -5872,10 +5858,9 @@ class BaseAssembler : public GenericAssembler {
 
     void twoByteOpVex(VexOperandType ty, TwoByteOpcodeID opcode, int32_t offset,
                       RegisterID base, XMMRegisterID src0, int reg) {
-      int r = (reg >> 3), x = 0, b = (base >> 3);
-      int m = 1;  // 0x0F
-      int w = 0, v = src0, l = 0;
-      threeOpVex(ty, r, x, b, m, w, v, l, opcode);
+      vexOrEvexPrefix(ty, reg, /* x = */ 0, base, /* map = */ 1, /* w = */ 0,
+                      src0,
+                      /* l = */ 0, opcode);
       memoryModRM(offset, base, reg);
     }
 
@@ -5890,10 +5875,9 @@ class BaseAssembler : public GenericAssembler {
     void twoByteOpVex_disp32(VexOperandType ty, TwoByteOpcodeID opcode,
                              int32_t offset, RegisterID base,
                              XMMRegisterID src0, int reg) {
-      int r = (reg >> 3), x = 0, b = (base >> 3);
-      int m = 1;  // 0x0F
-      int w = 0, v = src0, l = 0;
-      threeOpVex(ty, r, x, b, m, w, v, l, opcode);
+      vexOrEvexPrefix(ty, reg, /* x = */ 0, base, /* map = */ 1, /* w = */ 0,
+                      src0,
+                      /* l = */ 0, opcode);
       memoryModRM_disp32(offset, base, reg);
     }
 
@@ -5908,10 +5892,8 @@ class BaseAssembler : public GenericAssembler {
     void twoByteOpVex(VexOperandType ty, TwoByteOpcodeID opcode, int32_t offset,
                       RegisterID base, RegisterID index, int scale,
                       XMMRegisterID src0, int reg) {
-      int r = (reg >> 3), x = (index >> 3), b = (base >> 3);
-      int m = 1;  // 0x0F
-      int w = 0, v = src0, l = 0;
-      threeOpVex(ty, r, x, b, m, w, v, l, opcode);
+      vexOrEvexPrefix(ty, reg, index, base, /* map = */ 1, /* w = */ 0, src0,
+                      /* l = */ 0, opcode);
       memoryModRM(offset, base, index, scale, reg);
     }
 
@@ -5945,19 +5927,19 @@ class BaseAssembler : public GenericAssembler {
     void threeByteOpVex(VexOperandType ty, ThreeByteOpcodeID opcode,
                         ThreeByteEscape escape, RegisterID rm,
                         XMMRegisterID src0, int reg) {
-      int r = (reg >> 3), x = 0, b = (rm >> 3);
-      int m = 0, w = 0, v = src0, l = 0;
+      int map;
       switch (escape) {
         case ESCAPE_38:
-          m = 2;
+          map = 2;
           break;
         case ESCAPE_3A:
-          m = 3;
+          map = 3;
           break;
         default:
           MOZ_CRASH("unexpected escape");
       }
-      threeOpVex(ty, r, x, b, m, w, v, l, opcode);
+      vexOrEvexPrefix(ty, reg, /* x = */ 0, rm, map, /* w = */ 0, src0,
+                      /* l = */ 0, opcode);
       registerModRM(rm, reg);
     }
 
@@ -5987,19 +5969,19 @@ class BaseAssembler : public GenericAssembler {
     void threeByteOpVex(VexOperandType ty, ThreeByteOpcodeID opcode,
                         ThreeByteEscape escape, int32_t offset, RegisterID base,
                         XMMRegisterID src0, int reg) {
-      int r = (reg >> 3), x = 0, b = (base >> 3);
-      int m = 0, w = 0, v = src0, l = 0;
+      int map;
       switch (escape) {
         case ESCAPE_38:
-          m = 2;
+          map = 2;
           break;
         case ESCAPE_3A:
-          m = 3;
+          map = 3;
           break;
         default:
           MOZ_CRASH("unexpected escape");
       }
-      threeOpVex(ty, r, x, b, m, w, v, l, opcode);
+      vexOrEvexPrefix(ty, reg, /* x = */ 0, base, map, /* w = */ 0, src0,
+                      /* l = */ 0, opcode);
       memoryModRM(offset, base, reg);
     }
 
@@ -6007,19 +5989,19 @@ class BaseAssembler : public GenericAssembler {
                         ThreeByteEscape escape, int32_t offset, RegisterID base,
                         RegisterID index, int scale, XMMRegisterID src0,
                         int reg) {
-      int r = (reg >> 3), x = (index >> 3), b = (base >> 3);
-      int m = 0, w = 0, v = src0, l = 0;
+      int map;
       switch (escape) {
         case ESCAPE_38:
-          m = 2;
+          map = 2;
           break;
         case ESCAPE_3A:
-          m = 3;
+          map = 3;
           break;
         default:
           MOZ_CRASH("unexpected escape");
       }
-      threeOpVex(ty, r, x, b, m, w, v, l, opcode);
+      vexOrEvexPrefix(ty, reg, index, base, map, /* w = */ 0, src0, /* l = */ 0,
+                      opcode);
       memoryModRM(offset, base, index, scale, reg);
     }
 
@@ -6242,21 +6224,9 @@ class BaseAssembler : public GenericAssembler {
 
     void twoByteOpVex64(VexOperandType ty, TwoByteOpcodeID opcode,
                         RegisterID rm, XMMRegisterID src0, XMMRegisterID reg) {
-#  ifdef ENABLE_APX_EXPERIMENT
-      // W1 SSE<->GPR ops (vmovq, vcvtsi2sd r64, ...). Promote to EVEX when a
-      // high GPR is in rm or reg.
-      if (rm >= r16 || int(reg) >= int(r16)) {
-        int v = (src0 == invalid_xmm) ? 0 : int(src0);
-        evexFromVex(ty, reg, /* x = */ 0, rm, /* map = */ 1, /* w = */ 1, v,
-                    /* l = */ 0, /* nf = */ 0, opcode);
-        registerModRM(rm, reg);
-        return;
-      }
-#  endif
-      int r = (reg >> 3), x = 0, b = (rm >> 3);
-      int m = 1;  // 0x0F
-      int w = 1, v = src0, l = 0;
-      threeOpVex(ty, r, x, b, m, w, v, l, opcode);
+      vexOrEvexPrefix(ty, reg, /* x = */ 0, rm, /* map = */ 1, /* w = */ 1,
+                      src0,
+                      /* l = */ 0, opcode);
       registerModRM(rm, reg);
     }
 
@@ -6726,7 +6696,12 @@ class BaseAssembler : public GenericAssembler {
       // A base of esp or r12 would be interpreted as a sib, so force a
       // sib with no index & put the base in there.
 #ifdef JS_CODEGEN_X64
-      if ((base == hasSib) || (base == hasSib2)) {
+      // The "rm == 4 means SIB" rule is decided by the low 3 bits of the base
+      // register, so under APX r20/r28 (id & 7 == rsp) need the SIB form too,
+      // and r21/r29 (id & 7 == rbp) need a forced displacement like rbp/r13.
+      // Comparing (base & 7) is identical to the rsp/r12 and rbp/r13 checks for
+      // ids 0-15.
+      if ((base & 7) == (hasSib & 7)) {
 #else
       if (base == hasSib) {
 #endif
@@ -6742,7 +6717,7 @@ class BaseAssembler : public GenericAssembler {
         }
       } else {
 #ifdef JS_CODEGEN_X64
-        if (!offset && (base != noBase) && (base != noBase2)) {
+        if (!offset && ((base & 7) != (noBase & 7))) {
 #else
         if (!offset && (base != noBase)) {
 #endif
@@ -6759,9 +6734,10 @@ class BaseAssembler : public GenericAssembler {
 
     void memoryModRM_disp32(int32_t offset, RegisterID base, int reg) {
       // A base of esp or r12 would be interpreted as a sib, so force a
-      // sib with no index & put the base in there.
+      // sib with no index & put the base in there. (base & 7) also catches the
+      // APX extended bases r20/r28 whose low 3 bits == rsp.
 #ifdef JS_CODEGEN_X64
-      if ((base == hasSib) || (base == hasSib2)) {
+      if ((base & 7) == (hasSib & 7)) {
 #else
       if (base == hasSib) {
 #endif
@@ -6778,7 +6754,9 @@ class BaseAssembler : public GenericAssembler {
       MOZ_ASSERT(index != noIndex);
 
 #ifdef JS_CODEGEN_X64
-      if (!offset && (base != noBase) && (base != noBase2)) {
+      // (base & 7) == rbp forces a displacement (mod != 00) so the SIB base
+      // isn't misread as "no base"; catches the APX extended bases r21/r29 too.
+      if (!offset && ((base & 7) != (noBase & 7))) {
 #else
       if (!offset && (base != noBase)) {
 #endif
@@ -6865,6 +6843,25 @@ class BaseAssembler : public GenericAssembler {
       }
 
       m_buffer.putByteUnchecked(opcode);
+    }
+
+    // Emit just the VEX/EVEX prefix + opcode for a VEX instruction, choosing
+    // the EVEX-promoted form (Fig 3.4) when any GPR operand is an APX extended
+    // register (r16-r31), else the plain VEX form. Takes FULL register ids (reg
+    // = ModRM.reg, x = SIB.index, b = ModRM.rm/base; 0 when absent) and the VEX
+    // map (1/2/3); the caller emits the ModRM/SIB afterwards exactly as for
+    // VEX. This is the single VEX-vs-EVEX decision point for every GPR-carrying
+    // VEX op.
+    void vexOrEvexPrefix(VexOperandType ty, int reg, int x, int b, int map,
+                         int w, int vvvv, int l, int opcode) {
+#ifdef ENABLE_APX_EXPERIMENT
+      if (anyRequiresRex2(reg, x, b)) {
+        int v = (vvvv == invalid_xmm) ? 0 : vvvv;
+        evexFromVex(ty, reg, x, b, map, w, v, l, /* nf = */ 0, opcode);
+        return;
+      }
+#endif
+      threeOpVex(ty, reg >> 3, x >> 3, b >> 3, map, w, vvvv, l, opcode);
     }
 
 #ifdef ENABLE_APX_EXPERIMENT
