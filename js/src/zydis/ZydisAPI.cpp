@@ -47,9 +47,25 @@ void zydisDisassemble(const uint8_t* code, size_t codeLen,
   ZydisDecodedInstruction instruction;
   ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
   char buffer[1024];
-  while (ZYAN_SUCCESS(ZydisDecoderDecodeFull(&decoder, code + offset, length - offset,
-                                             &instruction, operands)))
-  {
+  while (offset < length) {
+    if (!ZYAN_SUCCESS(ZydisDecoderDecodeFull(&decoder, code + offset,
+                                             length - offset, &instruction,
+                                             operands))) {
+#ifdef ENABLE_APX_EXPERIMENT
+      // The vendored Zydis predates APX (REX2/EVEX), so it cannot decode the
+      // experiment's instructions. Emit the raw byte and advance by one so the
+      // complete byte stream is still recoverable from the dump and can be
+      // re-disassembled with an APX-aware tool (objdump >= 2.42, xed).
+      sprintf(buffer, "%08" PRIX64 "  %02x  .byte 0x%02x", runtime_address,
+              *(code + offset), *(code + offset));
+      println(buffer);
+      offset += 1;
+      runtime_address += 1;
+      continue;
+#else
+      break;
+#endif
+    }
 #  define LIMIT 48
 #  define LIMSTR "48"
 

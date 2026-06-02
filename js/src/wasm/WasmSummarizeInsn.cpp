@@ -87,6 +87,68 @@ Maybe<TrapMachineInsn> SummarizeTrapInstruction(const uint8_t* insn) {
   bool hasREX = false;
   bool hasVEX = false;
 
+#    ifdef ENABLE_APX_EXPERIMENT
+  // APX: rewrite a REX2 (0xD5) or extended-EVEX (0x62) prefix into the legacy
+  // or VEX byte form the matchers below already understand. The trapsite
+  // PC->kind table is authoritative at runtime; this only keeps the DEBUG
+  // self-check working when a trapping load/store landed on an r16-r31
+  // base/index (REX2) or on an EVEX-promoted VEX SSE<->memory move.
+  uint8_t norm[16];
+  const uint8_t* ap = insn;
+  size_t k = 0;
+  // Copy any leading legacy prefixes; a REX2 prefix follows these.
+  while (k < 6 &&
+         (ap[0] == 0x66 || ap[0] == 0xF2 || ap[0] == 0xF3 || ap[0] == 0xF0)) {
+    norm[k++] = *ap++;
+  }
+  if (is64bit && ap[0] == 0xD5) {
+    // REX2: 0xD5, then payload [M0 R4 X4 B4 W R3 X3 B3].
+    uint8_t payload = ap[1];
+    if ((payload >> 3) & 1) {
+      norm[k++] = 0x48;  // REX.W
+    }
+    if ((payload >> 7) & 1) {
+      norm[k++] = 0x0F;  // M0=1 selects the 0x0F (two-byte) opcode map
+    }
+    ap += 2;
+    for (size_t j = 0; k < sizeof(norm); j++, k++) {
+      norm[k] = ap[j];
+    }
+    insn = norm;
+  } else if (is64bit && ap[0] == 0x62) {
+    // Extended EVEX: 0x62, P0, P1, P2 (see evexFromVex/evexLegacy).
+    uint8_t p0 = ap[1], p1 = ap[2], p2 = ap[3];
+    uint8_t mmm = p0 & 0x07;
+    bool w = (p1 >> 7) & 1;
+    uint8_t pp = p1 & 0x03;
+    bool l = (p2 >> 5) & 1;
+    if (mmm >= 1 && mmm <= 3) {
+      // EVEX promotion of a VEX instruction: rebuild a 3-byte VEX prefix
+      // (R/X/B and vvvv are irrelevant to trapsite classification).
+      norm[k++] = 0xC4;
+      norm[k++] = 0xE0 | mmm;
+      norm[k++] = (w ? 0x80 : 0) | 0x78 | (l ? 0x04 : 0) | pp;
+    } else {
+      // map 4 (legacy-promoted NDD): rebuild legacy prefixes only.
+      if (pp == 1) {
+        norm[k++] = 0x66;
+      } else if (pp == 2) {
+        norm[k++] = 0xF3;
+      } else if (pp == 3) {
+        norm[k++] = 0xF2;
+      }
+      if (w) {
+        norm[k++] = 0x48;
+      }
+    }
+    ap += 4;
+    for (size_t j = 0; k < sizeof(norm); j++, k++) {
+      norm[k] = ap[j];
+    }
+    insn = norm;
+  }
+#    endif
+
   // Parse the "legacy" prefixes (only those we care about).  Skip REX on
   // 32-bit x86.
   while (true) {
