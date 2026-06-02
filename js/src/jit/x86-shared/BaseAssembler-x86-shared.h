@@ -6245,6 +6245,19 @@ class BaseAssembler : public GenericAssembler {
     void threeByteOpVex64(VexOperandType ty, ThreeByteOpcodeID opcode,
                           ThreeByteEscape escape, RegisterID rm,
                           XMMRegisterID src0, int reg) {
+#ifdef ENABLE_APX_EXPERIMENT
+      // EVEX-promote (Fig 3.4) when any GPR operand is r16-r31. Covers the
+      // 64-bit BMI ops (sarxq/shlxq/shrxq/andnq), whose vvvv (src0) is a GPR,
+      // and vpinsrq/vpextrq, whose ModRM.rm is a GPR. The vvvv operand is
+      // checked here because vexOrEvexPrefix (the 2-byte path) does not inspect
+      // it. None of this method's callers pass invalid_xmm, so src0 is always a
+      // real operand id (an r16 vvvv does not alias the invalid_xmm sentinel).
+      if (anyRequiresRex2(reg, 0, rm) || regRequiresRex2(int(src0))) {
+        threeByteOpEvexFromVex(ty, opcode, escape, rm, int(src0), reg,
+                               /* w = */ 1);
+        return;
+      }
+#endif
       int r = (reg >> 3), x = 0, b = (rm >> 3);
       int m = 0, w = 1, v = src0, l = 0;
       switch (escape) {
