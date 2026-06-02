@@ -5842,6 +5842,19 @@ class BaseAssembler : public GenericAssembler {
 
     void twoByteOpVex(VexOperandType ty, TwoByteOpcodeID opcode, RegisterID rm,
                       XMMRegisterID src0, int reg) {
+#ifdef ENABLE_APX_EXPERIMENT
+      // SSE<->GPR ops (vmovd/vmovq/vcvt*) reach here with a GPR in rm or reg;
+      // an XMM operand has code 0-15, so rm/reg >= r16 means a high GPR that
+      // VEX can't encode. Promote to EVEX (Fig 3.4). vvvv (src0) is XMM or
+      // invalid here.
+      if (rm >= r16 || reg >= int(r16)) {
+        int v = (src0 == invalid_xmm) ? 0 : int(src0);
+        evexFromVex(ty, reg, /* x = */ 0, rm, /* map = */ 1, /* w = */ 0, v,
+                    /* l = */ 0, /* nf = */ 0, opcode);
+        registerModRM(rm, reg);
+        return;
+      }
+#endif
       int r = (reg >> 3), x = 0, b = (rm >> 3);
       int m = 1;  // 0x0F
       int w = 0, v = src0, l = 0;
@@ -6229,6 +6242,17 @@ class BaseAssembler : public GenericAssembler {
 
     void twoByteOpVex64(VexOperandType ty, TwoByteOpcodeID opcode,
                         RegisterID rm, XMMRegisterID src0, XMMRegisterID reg) {
+#  ifdef ENABLE_APX_EXPERIMENT
+      // W1 SSE<->GPR ops (vmovq, vcvtsi2sd r64, ...). Promote to EVEX when a
+      // high GPR is in rm or reg.
+      if (rm >= r16 || int(reg) >= int(r16)) {
+        int v = (src0 == invalid_xmm) ? 0 : int(src0);
+        evexFromVex(ty, reg, /* x = */ 0, rm, /* map = */ 1, /* w = */ 1, v,
+                    /* l = */ 0, /* nf = */ 0, opcode);
+        registerModRM(rm, reg);
+        return;
+      }
+#  endif
       int r = (reg >> 3), x = 0, b = (rm >> 3);
       int m = 1;  // 0x0F
       int w = 1, v = src0, l = 0;
