@@ -782,9 +782,44 @@ class Assembler : public AssemblerX86Shared {
     masm.addq_rr(src.encoding(), dest.encoding());
   }
 #ifdef ENABLE_APX_EXPERIMENT
-  // APX 3-operand non-destructive add: dest = src0 + src1.
+  // APX 3-operand non-destructive integer ops: dest = src0 OP src1 (dest = src0
+  // - src1 for sub). Shifts take an immediate or CL count: dest = src OP count.
   void addq(Register src0, Register src1, Register dest) {
     masm.addq_rrr(src0.encoding(), src1.encoding(), dest.encoding());
+  }
+  void subq(Register src0, Register src1, Register dest) {
+    masm.subq_rrr(src0.encoding(), src1.encoding(), dest.encoding());
+  }
+  void andq(Register src0, Register src1, Register dest) {
+    masm.andq_rrr(src0.encoding(), src1.encoding(), dest.encoding());
+  }
+  void orq(Register src0, Register src1, Register dest) {
+    masm.orq_rrr(src0.encoding(), src1.encoding(), dest.encoding());
+  }
+  void xorq(Register src0, Register src1, Register dest) {
+    masm.xorq_rrr(src0.encoding(), src1.encoding(), dest.encoding());
+  }
+  void shlq(Imm32 imm, Register src, Register dest) {
+    masm.shlq_irr(imm.value, src.encoding(), dest.encoding());
+  }
+  void shrq(Imm32 imm, Register src, Register dest) {
+    masm.shrq_irr(imm.value, src.encoding(), dest.encoding());
+  }
+  void sarq(Imm32 imm, Register src, Register dest) {
+    masm.sarq_irr(imm.value, src.encoding(), dest.encoding());
+  }
+  // dest = src shifted by CL. The count register must be rcx.
+  void shlq(Register src, Register count, Register dest) {
+    MOZ_ASSERT(count == rcx);
+    masm.shlq_CLrr(src.encoding(), dest.encoding());
+  }
+  void shrq(Register src, Register count, Register dest) {
+    MOZ_ASSERT(count == rcx);
+    masm.shrq_CLrr(src.encoding(), dest.encoding());
+  }
+  void sarq(Register src, Register count, Register dest) {
+    MOZ_ASSERT(count == rcx);
+    masm.sarq_CLrr(src.encoding(), dest.encoding());
   }
 #endif
   void addq(const Operand& src, Register dest) {

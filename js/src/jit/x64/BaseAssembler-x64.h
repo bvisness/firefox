@@ -34,15 +34,79 @@ class BaseAssemblerX64 : public BaseAssembler {
   }
 
 #ifdef ENABLE_APX_EXPERIMENT
-  // APX 3-operand non-destructive add: dst = src0 + src1. Encoded via EVEX map
-  // 4 with the NDD (new data destination) form. Matches gas `add dst, src0,
-  // src1` (src0 -> ModRM.rm, src1 -> ModRM.reg, dst -> vvvv).
+  // APX 3-operand non-destructive integer ops: dst = src0 OP src1, encoded via
+  // EVEX map 4 with the NDD (new data destination) form. src0 -> ModRM.rm, src1
+  // -> ModRM.reg, dst -> vvvv. Matches gas `OP dst, src0, src1`. For the
+  // non-commutative SUB this means dst = src0 - src1.
   void addq_rrr(RegisterID src0, RegisterID src1, RegisterID dst) {
     spew(currentOffset(), "addq       %s, %s, %s", GPReg64Name(src0),
          GPReg64Name(src1), GPReg64Name(dst));
-    m_formatter.oneByteOp64_apx(OP_ADD_EvGv, /* rm = */ src0, /* reg = */ src1,
-                                /* ndd = */ dst, /* nd = */ true,
+    m_formatter.oneByteOp64_apx(OP_ADD_EvGv, src0, src1, dst, /* nd = */ true,
                                 /* nf = */ false);
+  }
+  void subq_rrr(RegisterID src0, RegisterID src1, RegisterID dst) {
+    spew(currentOffset(), "subq       %s, %s, %s", GPReg64Name(src0),
+         GPReg64Name(src1), GPReg64Name(dst));
+    m_formatter.oneByteOp64_apx(OP_SUB_EvGv, src0, src1, dst, true, false);
+  }
+  void andq_rrr(RegisterID src0, RegisterID src1, RegisterID dst) {
+    spew(currentOffset(), "andq       %s, %s, %s", GPReg64Name(src0),
+         GPReg64Name(src1), GPReg64Name(dst));
+    m_formatter.oneByteOp64_apx(OP_AND_EvGv, src0, src1, dst, true, false);
+  }
+  void orq_rrr(RegisterID src0, RegisterID src1, RegisterID dst) {
+    spew(currentOffset(), "orq        %s, %s, %s", GPReg64Name(src0),
+         GPReg64Name(src1), GPReg64Name(dst));
+    m_formatter.oneByteOp64_apx(OP_OR_EvGv, src0, src1, dst, true, false);
+  }
+  void xorq_rrr(RegisterID src0, RegisterID src1, RegisterID dst) {
+    spew(currentOffset(), "xorq       %s, %s, %s", GPReg64Name(src0),
+         GPReg64Name(src1), GPReg64Name(dst));
+    m_formatter.oneByteOp64_apx(OP_XOR_EvGv, src0, src1, dst, true, false);
+  }
+
+  // APX 3-operand non-destructive shifts: dst = src << imm / >> imm, encoded
+  // via EVEX map 4 group-2 with the NDD form. The group opcode extension goes
+  // in ModRM.reg, src -> ModRM.rm, dst -> vvvv.
+  void shiftq_irr(GroupOpcodeID op, int32_t imm, RegisterID src,
+                  RegisterID dst) {
+    MOZ_ASSERT(imm < 64);
+    m_formatter.oneByteOp64_apx(OP_GROUP2_EvIb, src, op, dst, true, false);
+    m_formatter.immediate8u(imm);
+  }
+  void shlq_irr(int32_t imm, RegisterID src, RegisterID dst) {
+    spew(currentOffset(), "shlq       $%d, %s, %s", imm, GPReg64Name(src),
+         GPReg64Name(dst));
+    shiftq_irr(GROUP2_OP_SHL, imm, src, dst);
+  }
+  void shrq_irr(int32_t imm, RegisterID src, RegisterID dst) {
+    spew(currentOffset(), "shrq       $%d, %s, %s", imm, GPReg64Name(src),
+         GPReg64Name(dst));
+    shiftq_irr(GROUP2_OP_SHR, imm, src, dst);
+  }
+  void sarq_irr(int32_t imm, RegisterID src, RegisterID dst) {
+    spew(currentOffset(), "sarq       $%d, %s, %s", imm, GPReg64Name(src),
+         GPReg64Name(dst));
+    shiftq_irr(GROUP2_OP_SAR, imm, src, dst);
+  }
+  // Shift src by CL into dst (non-destructive).
+  void shlq_CLrr(RegisterID src, RegisterID dst) {
+    spew(currentOffset(), "shlq       %%cl, %s, %s", GPReg64Name(src),
+         GPReg64Name(dst));
+    m_formatter.oneByteOp64_apx(OP_GROUP2_EvCL, src, GROUP2_OP_SHL, dst, true,
+                                false);
+  }
+  void shrq_CLrr(RegisterID src, RegisterID dst) {
+    spew(currentOffset(), "shrq       %%cl, %s, %s", GPReg64Name(src),
+         GPReg64Name(dst));
+    m_formatter.oneByteOp64_apx(OP_GROUP2_EvCL, src, GROUP2_OP_SHR, dst, true,
+                                false);
+  }
+  void sarq_CLrr(RegisterID src, RegisterID dst) {
+    spew(currentOffset(), "sarq       %%cl, %s, %s", GPReg64Name(src),
+         GPReg64Name(dst));
+    m_formatter.oneByteOp64_apx(OP_GROUP2_EvCL, src, GROUP2_OP_SAR, dst, true,
+                                false);
   }
 #endif
 
