@@ -57,6 +57,26 @@ class Registers {
   static const uint32_t Allocatable = 7;
 
 #elif defined(JS_CODEGEN_X64)
+#  ifdef ENABLE_APX_EXPERIMENT
+  // APX widens the GPR file to 32. SetType must hold one bit per register, so
+  // it grows from uint16_t to uint32_t. The extended registers (r16-r31) are
+  // represented and encodable, but kept out of AllocatableMask until the
+  // allocator and trampoline/bailout paths are widened to track 32 GPRs.
+  using SetType = uint32_t;
+
+  static const char* GetName(Code code) {
+    static const char* const Names[] = {
+        "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi",
+        "r8",  "r9",  "r10", "r11", "r12", "r13", "r14", "r15",
+        "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23",
+        "r24", "r25", "r26", "r27", "r28", "r29", "r30", "r31"};
+    return Names[code];
+  }
+
+  static const uint32_t Total = 32;
+  static const uint32_t TotalPhys = 32;
+  static const uint32_t Allocatable = 14;
+#  else
   using SetType = uint16_t;
 
   static const char* GetName(Code code) {
@@ -69,6 +89,7 @@ class Registers {
   static const uint32_t Total = 16;
   static const uint32_t TotalPhys = 16;
   static const uint32_t Allocatable = 14;
+#  endif
 #endif
 
   static uint32_t SetSize(SetType x) { return std::popcount(x); }
@@ -93,7 +114,11 @@ class Registers {
   static const Encoding StackPointer = X86Encoding::rsp;
   static const Encoding Invalid = X86Encoding::invalid_reg;
 
-  static const SetType AllMask = (1 << Total) - 1;
+  // All register bits set. Written as a shift from all-ones rather than
+  // (1 << Total) - 1 so it is well-defined when Total == sizeof(SetType) * 8
+  // (e.g. 32 GPRs in a uint32_t under APX, where 1 << 32 would overflow).
+  static const SetType AllMask =
+      SetType(SetType(-1) >> (sizeof(SetType) * 8 - Total));
 
 #if defined(JS_CODEGEN_X86)
   static const SetType ArgRegMask = 0;
@@ -136,7 +161,14 @@ class Registers {
 
   static const SetType NonAllocatableMask =
       (1 << X86Encoding::rsp) | (1 << X86Encoding::rbp) |
-      (1 << X86Encoding::r11);  // This is ScratchReg.
+      (1 << X86Encoding::r11)  // This is ScratchReg.
+#  ifdef ENABLE_APX_EXPERIMENT
+      // r16-r31 (bits 16-31): encodable via APX instructions, but not yet
+      // allocatable. Kept out of the allocator until PushRegsInMask, the
+      // trampoline RegisterDump, and Safepoints are widened to 32 GPRs.
+      | (SetType(0xFFFF) << 16)
+#  endif
+      ;
 
   // Registers returned from a JS -> JS call.
   static const SetType JSCallMask = (1 << X86Encoding::rcx);

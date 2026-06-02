@@ -626,6 +626,15 @@ int main(int argc, char* argv[]) {
   JS::Prefs::setAtStartup_experimental_weakrefs_expose_cleanupSome(true);
   JS::Prefs::setAtStartup_experimental_symbols_as_weakmap_keys(true);
 
+#ifdef ENABLE_APX_EXPERIMENT
+  // The jsapi-tests binary has no --enable-apx flag, so let tests that execute
+  // APX instructions (e.g. under SDE) opt in via the environment. Must run
+  // before JS_Init(), which computes the CPU feature flags.
+  if (getenv("JS_ENABLE_APX")) {
+    JS::SetAPXEnabled(true);
+  }
+#endif
+
   if (options.runRuntimeTests) {
     if (!JS_Init()) {
       Die("JS_Init() failed.");

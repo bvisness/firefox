@@ -6150,6 +6150,18 @@ class BaseAssembler : public GenericAssembler {
       memoryModRM(offset, base, reg);
     }
 
+#  ifdef ENABLE_APX_EXPERIMENT
+    // 64-bit register-register form encoded via the APX EVEX prefix (map 4).
+    // When nd is true this is the 3-operand NDD form: ndd is the destination,
+    // rm and reg are the sources. nf suppresses the status-flags update.
+    void oneByteOp64_apx(OneByteOpcodeID opcode, RegisterID rm, int reg,
+                         int ndd, bool nd, bool nf) {
+      evexLegacy(reg, /* x = */ 0, rm, ndd, /* pp = */ 0, /* w = */ true, nd,
+                 nf, opcode);
+      registerModRM(rm, reg);
+    }
+#  endif
+
     void oneByteOp64_disp32(OneByteOpcodeID opcode, int32_t offset,
                             RegisterID base, int reg) {
       m_buffer.ensureSpace(MaxInstructionSize);
@@ -6708,6 +6720,48 @@ class BaseAssembler : public GenericAssembler {
 
       m_buffer.putByteUnchecked(opcode);
     }
+
+#ifdef ENABLE_APX_EXPERIMENT
+    // Emit the 4-byte APX extended-EVEX prefix promoting a legacy instruction
+    // into EVEX map 4 (Intel APX spec sec 3.1.2.3.1, Figure 3.3), then the
+    // opcode. Register operands are full 5-bit ids (0-31): r = ModRM.reg, b =
+    // ModRM.rm or base, x = SIB.index (only meaningful for memory operands;
+    // otherwise 0). ndd is the new-data-destination register encoded in vvvv.
+    // nd selects the 3-operand NDD form; nf suppresses the status-flags update.
+    // pp is the implied legacy prefix (0 = none, 1 = 0x66, 2 = 0xF3, 3 = 0xF2).
+    // Inverted (one's-complement) fields match the masks below; the
+    // construction is verified against gas for `add r19, r17, r18` == 62 ec e4
+    // 10 01 d1.
+    void evexLegacy(int r, int x, int b, int ndd, int pp, bool w, bool nd,
+                    bool nf, int opcode) {
+      m_buffer.ensureSpace(MaxInstructionSize);
+
+      int v = nd ? ndd : 0;
+      static const int Map4 = 4;
+
+      // Payload byte 0: [R3 X3 B3 R4 B4 M2 M1 M0]; R3,X3,B3,R4 inverted.
+      uint8_t p0 = (((r >> 3) & 1) << 7) | (((x >> 3) & 1) << 6) |
+                   (((b >> 3) & 1) << 5) | (((r >> 4) & 1) << 4) |
+                   (((b >> 4) & 1) << 3) | (Map4 & 7);
+      p0 ^= 0xF0;
+
+      // Payload byte 1: [W V3 V2 V1 V0 (X4=~U) p p]; vvvv and X4 inverted.
+      uint8_t p1 = (uint8_t(w) << 7) | ((v & 0xF) << 3) |
+                   (((x >> 4) & 1) << 2) | (pp & 3);
+      p1 ^= 0x7C;
+
+      // Payload byte 2: [0 0 0 ND V4 NF 0 0]; V4 inverted.
+      uint8_t p2 =
+          (uint8_t(nd) << 4) | (((v >> 4) & 1) << 3) | (uint8_t(nf) << 2);
+      p2 ^= 0x08;
+
+      m_buffer.putByteUnchecked(PRE_EVEX);
+      m_buffer.putByteUnchecked(p0);
+      m_buffer.putByteUnchecked(p1);
+      m_buffer.putByteUnchecked(p2);
+      m_buffer.putByteUnchecked(opcode);
+    }
+#endif
 
     x86_shared::AssemblerBuffer m_buffer;
   } m_formatter;

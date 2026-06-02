@@ -10,6 +10,7 @@ include("../js-standalone.mozbuild")
 UNIFIED_SOURCES += [
     "selfTest.cpp",
     "testAddPropertyPropcache.cpp",
+    "testApxEvex.cpp",
     "testArgumentsObject.cpp",
     "testArrayBuffer.cpp",
     "testArrayBufferOrViewAPI.cpp",

@@ -140,6 +140,8 @@ enum OneByteOpcodeID {
   OP_RET_Iz = 0xC2,
   PRE_VEX_C4 = 0xC4,
   PRE_VEX_C5 = 0xC5,
+  PRE_EVEX = 0x62,
+  PRE_REX2 = 0xD5,
   OP_RET = 0xC3,
   OP_GROUP11_EvIb = 0xC6,
   OP_GROUP11_EvIz = 0xC7,

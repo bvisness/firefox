@@ -34,6 +34,29 @@ enum RegisterID : uint8_t {
   r13,
   r14,
   r15
+#  ifdef ENABLE_APX_EXPERIMENT
+  // Intel APX extended GPRs (r16-r31). These are encodable but, until the
+  // register allocator is widened to track 32 GPRs, they are not allocatable
+  // (see Registers::NonAllocatableMask) and are only used by explicit APX
+  // assembler ops.
+  ,
+  r16,
+  r17,
+  r18,
+  r19,
+  r20,
+  r21,
+  r22,
+  r23,
+  r24,
+  r25,
+  r26,
+  r27,
+  r28,
+  r29,
+  r30,
+  r31
+#  endif
 #endif
   ,
   invalid_reg
@@ -110,6 +133,25 @@ inline const char* GPReg64Name(RegisterID reg) {
                                       "%r13",
                                       "%r14",
                                       "%r15"
+#    ifdef ENABLE_APX_EXPERIMENT
+                                      ,
+                                      "%r16",
+                                      "%r17",
+                                      "%r18",
+                                      "%r19",
+                                      "%r20",
+                                      "%r21",
+                                      "%r22",
+                                      "%r23",
+                                      "%r24",
+                                      "%r25",
+                                      "%r26",
+                                      "%r27",
+                                      "%r28",
+                                      "%r29",
+                                      "%r30",
+                                      "%r31"
+#    endif
 #  endif
   };
   MOZ_ASSERT(size_t(reg) < std::ranges::size(names));
@@ -136,6 +178,25 @@ inline const char* GPReg32Name(RegisterID reg) {
                                       "%r13d",
                                       "%r14d",
                                       "%r15d"
+#  ifdef ENABLE_APX_EXPERIMENT
+                                      ,
+                                      "%r16d",
+                                      "%r17d",
+                                      "%r18d",
+                                      "%r19d",
+                                      "%r20d",
+                                      "%r21d",
+                                      "%r22d",
+                                      "%r23d",
+                                      "%r24d",
+                                      "%r25d",
+                                      "%r26d",
+                                      "%r27d",
+                                      "%r28d",
+                                      "%r29d",
+                                      "%r30d",
+                                      "%r31d"
+#  endif
 #endif
   };
   MOZ_ASSERT(size_t(reg) < std::ranges::size(names));
@@ -161,6 +222,25 @@ inline const char* GPReg16Name(RegisterID reg) {
                                       "%r13w",
                                       "%r14w",
                                       "%r15w"
+#  ifdef ENABLE_APX_EXPERIMENT
+                                      ,
+                                      "%r16w",
+                                      "%r17w",
+                                      "%r18w",
+                                      "%r19w",
+                                      "%r20w",
+                                      "%r21w",
+                                      "%r22w",
+                                      "%r23w",
+                                      "%r24w",
+                                      "%r25w",
+                                      "%r26w",
+                                      "%r27w",
+                                      "%r28w",
+                                      "%r29w",
+                                      "%r30w",
+                                      "%r31w"
+#  endif
 #endif
   };
   MOZ_ASSERT(size_t(reg) < std::ranges::size(names));
@@ -186,6 +266,25 @@ inline const char* GPReg8Name(RegisterID reg) {
                                       "%r13b",
                                       "%r14b",
                                       "%r15b"
+#  ifdef ENABLE_APX_EXPERIMENT
+                                      ,
+                                      "%r16b",
+                                      "%r17b",
+                                      "%r18b",
+                                      "%r19b",
+                                      "%r20b",
+                                      "%r21b",
+                                      "%r22b",
+                                      "%r23b",
+                                      "%r24b",
+                                      "%r25b",
+                                      "%r26b",
+                                      "%r27b",
+                                      "%r28b",
+                                      "%r29b",
+                                      "%r30b",
+                                      "%r31b"
+#  endif
 #endif
   };
   MOZ_ASSERT(size_t(reg) < std::ranges::size(names));

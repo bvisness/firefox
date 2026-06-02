@@ -33,6 +33,19 @@ class BaseAssemblerX64 : public BaseAssembler {
     m_formatter.oneByteOp64(OP_ADD_GvEv, src, dst);
   }
 
+#ifdef ENABLE_APX_EXPERIMENT
+  // APX 3-operand non-destructive add: dst = src0 + src1. Encoded via EVEX map
+  // 4 with the NDD (new data destination) form. Matches gas `add dst, src0,
+  // src1` (src0 -> ModRM.rm, src1 -> ModRM.reg, dst -> vvvv).
+  void addq_rrr(RegisterID src0, RegisterID src1, RegisterID dst) {
+    spew(currentOffset(), "addq       %s, %s, %s", GPReg64Name(src0),
+         GPReg64Name(src1), GPReg64Name(dst));
+    m_formatter.oneByteOp64_apx(OP_ADD_EvGv, /* rm = */ src0, /* reg = */ src1,
+                                /* ndd = */ dst, /* nd = */ true,
+                                /* nf = */ false);
+  }
+#endif
+
   void addq_mr(int32_t offset, RegisterID base, RegisterID dst) {
     spew(currentOffset(), "addq       " MEM_ob ", %s", ADDR_ob(offset, base),
          GPReg64Name(dst));

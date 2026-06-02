@@ -59,7 +59,13 @@ class Operand {
  private:
   Kind kind_ : 4;
   // Used as a Register::Encoding and a FloatRegister::Encoding.
+#ifdef ENABLE_APX_EXPERIMENT
+  // APX widens RegisterID to 32 GPRs, so encodings reach 31 and the invalid
+  // sentinel is 32: six bits are required.
+  uint32_t base_ : 6;
+#else
   uint32_t base_ : 5;
+#endif
   Scale scale_ : 3;
   // We don't use all 8 bits, of course, but GCC complains if the size of
   // this field is smaller than the size of Register::Encoding.

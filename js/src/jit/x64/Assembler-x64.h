@@ -28,6 +28,27 @@ static constexpr Register r14{X86Encoding::r14};
 static constexpr Register r15{X86Encoding::r15};
 static constexpr Register rsp{X86Encoding::rsp};
 
+#ifdef ENABLE_APX_EXPERIMENT
+// Intel APX extended GPRs. Encodable via APX instructions but not allocatable
+// until the register allocator is widened (see Registers::NonAllocatableMask).
+static constexpr Register r16{X86Encoding::r16};
+static constexpr Register r17{X86Encoding::r17};
+static constexpr Register r18{X86Encoding::r18};
+static constexpr Register r19{X86Encoding::r19};
+static constexpr Register r20{X86Encoding::r20};
+static constexpr Register r21{X86Encoding::r21};
+static constexpr Register r22{X86Encoding::r22};
+static constexpr Register r23{X86Encoding::r23};
+static constexpr Register r24{X86Encoding::r24};
+static constexpr Register r25{X86Encoding::r25};
+static constexpr Register r26{X86Encoding::r26};
+static constexpr Register r27{X86Encoding::r27};
+static constexpr Register r28{X86Encoding::r28};
+static constexpr Register r29{X86Encoding::r29};
+static constexpr Register r30{X86Encoding::r30};
+static constexpr Register r31{X86Encoding::r31};
+#endif
+
 static constexpr FloatRegister xmm0 =
     FloatRegister(X86Encoding::xmm0, FloatRegisters::Double);
 static constexpr FloatRegister xmm1 =
@@ -760,6 +781,12 @@ class Assembler : public AssemblerX86Shared {
   void addq(Register src, Register dest) {
     masm.addq_rr(src.encoding(), dest.encoding());
   }
+#ifdef ENABLE_APX_EXPERIMENT
+  // APX 3-operand non-destructive add: dest = src0 + src1.
+  void addq(Register src0, Register src1, Register dest) {
+    masm.addq_rrr(src0.encoding(), src1.encoding(), dest.encoding());
+  }
+#endif
   void addq(const Operand& src, Register dest) {
     switch (src.kind()) {
       case Operand::REG:
