@@ -469,13 +469,13 @@ void MacroAssembler::PushRegsInMask(LiveRegisterSet set) {
   for (GeneralRegisterBackwardIterator iter(set.gprs()); iter.more(); ++iter) {
     diffG -= sizeof(intptr_t);
 #ifdef ENABLE_APX_EXPERIMENT
-    if ((*iter).encoding() >= X86Encoding::r16) {
-      // The APX extended GPRs r16-r31 are not allocatable yet, so they never
-      // hold a live value. Reserve their RegisterDump slot to keep the dump
-      // layout (which is indexed by register code) intact, but don't emit a
-      // real push: pushing r16-r31 requires a REX2 prefix that would #UD on
-      // non-APX hosts. Phase 3c will push them for real, gated on runtime APX
-      // availability.
+    if ((*iter).encoding() >= X86Encoding::r16 && !CPUInfo::IsAPXPresent()) {
+      // r16-r31 can only be pushed via a REX2 prefix, which #UDs on non-APX
+      // hosts. When APX is unavailable they are also never allocated, so they
+      // hold no live value: reserve their RegisterDump slot to keep the
+      // (register-code-indexed) dump layout intact, without a real push. When
+      // APX is present, fall through and push for real so a live value is
+      // saved.
       reserveStack(sizeof(intptr_t));
       continue;
     }
@@ -615,10 +615,10 @@ void MacroAssembler::PopRegsInMaskIgnore(LiveRegisterSet set,
     for (GeneralRegisterForwardIterator iter(set.gprs()); iter.more(); ++iter) {
       diffG -= sizeof(intptr_t);
 #ifdef ENABLE_APX_EXPERIMENT
-      if ((*iter).encoding() >= X86Encoding::r16) {
-        // Mirror PushRegsInMask: r16-r31 only reserved a slot, so free it
-        // rather than emitting a REX2 pop (see PushRegsInMask for the
-        // rationale).
+      if ((*iter).encoding() >= X86Encoding::r16 && !CPUInfo::IsAPXPresent()) {
+        // Mirror PushRegsInMask: without APX, r16-r31 only reserved a slot, so
+        // free it rather than emitting a REX2 pop. With APX they were pushed
+        // for real; fall through and pop them.
         freeStack(sizeof(intptr_t));
         continue;
       }
@@ -630,9 +630,10 @@ void MacroAssembler::PopRegsInMaskIgnore(LiveRegisterSet set,
          ++iter) {
       diffG -= sizeof(intptr_t);
 #ifdef ENABLE_APX_EXPERIMENT
-      if ((*iter).encoding() >= X86Encoding::r16) {
-        continue;  // Slot was only reserved; freed below by
-                   // freeStack(reservedG).
+      if ((*iter).encoding() >= X86Encoding::r16 && !CPUInfo::IsAPXPresent()) {
+        continue;  // Without APX the slot was only reserved; freed below by
+                   // freeStack(reservedG). With APX, fall through to restore
+                   // it.
       }
 #endif
       if (!ignore.has(*iter)) {

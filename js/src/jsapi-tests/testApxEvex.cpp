@@ -230,4 +230,43 @@ BEGIN_TEST(testApxRex2_execute) {
 }
 END_TEST(testApxRex2_execute)
 
+// Confirm PushRegsInMask/PopRegsInMask save and restore extended registers
+// across a clobber, using a hand-built register set containing r16-r31. (The
+// allocator does not produce such sets yet; this exercises the save/restore
+// machinery that Phase 3c will rely on once r16-r31 are allocatable.) Requires
+// APX; skipped otherwise.
+BEGIN_TEST(testApxRex2_pushregsinmask) {
+  if (!CPUInfo::IsAPXPresent()) {
+    return true;  // Skip: no APX on this host.
+  }
+
+  TempAllocator tempAlloc(&cx->tempLifoAlloc());
+  JitContext jcx(cx);
+  StackMacroAssembler masm(cx, tempAlloc);
+  AutoCreatedBy acb(masm, __func__);
+
+  uint64_t out[2] = {};
+
+  LiveRegisterSet set(
+      GeneralRegisterSet((Registers::SetType(1) << X86Encoding::r16) |
+                         (Registers::SetType(1) << X86Encoding::r20)),
+      FloatRegisterSet());
+
+  PrepareJit(masm);
+  masm.movePtr(ImmWord(0xCAFE), r16);
+  masm.movePtr(ImmWord(0xBEEF), r20);
+  masm.PushRegsInMask(set);            // real REX2 push of r16, r20
+  masm.movePtr(ImmWord(0xDEAD), r16);  // clobber both
+  masm.movePtr(ImmWord(0xDEAD), r20);
+  masm.PopRegsInMask(set);  // restore from the dump
+  masm.storePtr(r16, AbsoluteAddress(&out[0]));
+  masm.storePtr(r20, AbsoluteAddress(&out[1]));
+  CHECK(ExecuteJit(cx, masm));
+
+  CHECK(out[0] == 0xCAFE);
+  CHECK(out[1] == 0xBEEF);
+  return true;
+}
+END_TEST(testApxRex2_pushregsinmask)
+
 #endif  // defined(ENABLE_APX_EXPERIMENT) && defined(JS_CODEGEN_X64)
