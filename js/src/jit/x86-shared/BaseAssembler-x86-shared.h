@@ -5491,7 +5491,14 @@ class BaseAssembler : public GenericAssembler {
                                ThreeByteOpcodeID opcode, ThreeByteEscape escape,
                                uint32_t imm, RegisterID src1,
                                XMMRegisterID src0, XMMRegisterID dst) {
-    if (useLegacySSEEncoding(src0, dst)) {
+#ifdef ENABLE_APX_EXPERIMENT
+    bool gprNeedsEvex = (src1 >= r16);
+#else
+    constexpr bool gprNeedsEvex = false;
+#endif
+    // The legacy SSE three-byte form cannot carry a REX2 prefix, so a GPR in
+    // r16-r31 must use the VEX form (which EVEX-promotes via vexOrEvexPrefix).
+    if (useLegacySSEEncoding(src0, dst) && !gprNeedsEvex) {
       spew(currentOffset(), "%-11s$0x%x, %s, %s", legacySSEOpName(name), imm,
            GPReg32Name(src1), XMMRegName(dst));
       m_formatter.legacySSEPrefix(ty);
@@ -5510,7 +5517,12 @@ class BaseAssembler : public GenericAssembler {
                                ThreeByteOpcodeID opcode, ThreeByteEscape escape,
                                uint32_t imm, int32_t offset, RegisterID base,
                                XMMRegisterID src0, XMMRegisterID dst) {
-    if (useLegacySSEEncoding(src0, dst)) {
+#ifdef ENABLE_APX_EXPERIMENT
+    bool gprNeedsEvex = (base >= r16);
+#else
+    constexpr bool gprNeedsEvex = false;
+#endif
+    if (useLegacySSEEncoding(src0, dst) && !gprNeedsEvex) {
       spew(currentOffset(), "%-11s$0x%x, " MEM_ob ", %s", legacySSEOpName(name),
            imm, ADDR_ob(offset, base), XMMRegName(dst));
       m_formatter.legacySSEPrefix(ty);
@@ -5530,7 +5542,12 @@ class BaseAssembler : public GenericAssembler {
                                uint32_t imm, int32_t offset, RegisterID base,
                                RegisterID index, int scale, XMMRegisterID src0,
                                XMMRegisterID dst) {
-    if (useLegacySSEEncoding(src0, dst)) {
+#ifdef ENABLE_APX_EXPERIMENT
+    bool gprNeedsEvex = (base >= r16) || (index >= r16);
+#else
+    constexpr bool gprNeedsEvex = false;
+#endif
+    if (useLegacySSEEncoding(src0, dst) && !gprNeedsEvex) {
       spew(currentOffset(), "%-11s$0x%x, " MEM_obs ", %s",
            legacySSEOpName(name), imm, ADDR_obs(offset, base, index, scale),
            XMMRegName(dst));

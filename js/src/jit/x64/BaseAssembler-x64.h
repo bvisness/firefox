@@ -1523,6 +1523,19 @@ class BaseAssemblerX64 : public BaseAssembler {
                                ThreeByteOpcodeID opcode, ThreeByteEscape escape,
                                uint32_t imm, XMMRegisterID src,
                                RegisterID dst) {
+#ifdef ENABLE_APX_EXPERIMENT
+    if (dst >= r16) {
+      // The legacy 0x0F3A form (e.g. vpextrq) cannot carry a REX2 prefix, so a
+      // GPR destination in r16-r31 must use the EVEX-promoted form. There is no
+      // third source operand, so vvvv is unused (0).
+      spew(currentOffset(), "%-11s$0x%x, %s, %s", name, imm, GPReg64Name(dst),
+           XMMRegName(src));
+      m_formatter.threeByteOpEvexFromVex(ty, opcode, escape, dst,
+                                         /* vvvv = */ 0, src, /* w = */ 1);
+      m_formatter.immediate8u(imm);
+      return;
+    }
+#endif
     spew(currentOffset(), "%-11s$0x%x, %s, %s", legacySSEOpName(name), imm,
          GPReg64Name(dst), XMMRegName(src));
     m_formatter.legacySSEPrefix(ty);
@@ -1534,6 +1547,20 @@ class BaseAssemblerX64 : public BaseAssembler {
                                ThreeByteOpcodeID opcode, ThreeByteEscape escape,
                                uint32_t imm, RegisterID src1,
                                XMMRegisterID src0, XMMRegisterID dst) {
+#ifdef ENABLE_APX_EXPERIMENT
+    if (src1 >= r16) {
+      // The legacy 0x0F3A form (e.g. vpinsrq) cannot carry a REX2 prefix, so a
+      // GPR source in r16-r31 must use the EVEX-promoted form. vvvv is the
+      // second xmm source (= dst for the 2-operand legacy form).
+      XMMRegisterID vv = (src0 == invalid_xmm) ? dst : src0;
+      spew(currentOffset(), "%-11s$0x%x, %s, %s, %s", name, imm,
+           GPReg64Name(src1), XMMRegName(vv), XMMRegName(dst));
+      m_formatter.threeByteOpEvexFromVex(ty, opcode, escape, src1, vv, dst,
+                                         /* w = */ 1);
+      m_formatter.immediate8u(imm);
+      return;
+    }
+#endif
     if (useLegacySSEEncoding(src0, dst)) {
       spew(currentOffset(), "%-11s$0x%x, %s, %s", legacySSEOpName(name), imm,
            GPReg64Name(src1), XMMRegName(dst));
