@@ -554,6 +554,8 @@ class GlobalDesc {
 
   size_t sizeOfExcludingThis(mozilla::MallocSizeOf mallocSizeOf) const;
   WASM_DECLARE_FRIEND_SERIALIZE(GlobalDesc);
+
+  static bool typeMatches(const GlobalDesc& a, const GlobalDesc& b);
 };
 
 using GlobalDescVector = Vector<GlobalDesc, 0, SystemAllocPolicy>;
@@ -858,6 +860,8 @@ struct Limits {
         maximum(maximum),
         shared(shared),
         pageSize(pageSize) {}
+
+  static bool matches(Limits a, Limits b);
 };
 
 WASM_DECLARE_CACHEABLE_POD(Limits);
@@ -910,6 +914,8 @@ struct MemoryDesc {
   MemoryDesc() = default;
   explicit MemoryDesc(Limits limits)
       : limits(limits), importIndex(mozilla::Nothing()) {}
+
+  static bool typeMatches(const MemoryDesc& a, const MemoryDesc& b);
 };
 
 WASM_DECLARE_CACHEABLE_POD(MemoryDesc);
@@ -931,6 +937,8 @@ struct TableType {
   TableType() = default;
   TableType(Limits limits, RefType elemType)
       : limits(limits), elemType(elemType) {}
+
+  static bool matches(TableType a, TableType b);
 };
 
 struct TableDesc {

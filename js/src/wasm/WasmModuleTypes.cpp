@@ -196,6 +196,42 @@ size_t Export::sizeOfExcludingThis(MallocSizeOf mallocSizeOf) const {
   return fieldName_.sizeOfExcludingThis(mallocSizeOf);
 }
 
+bool Limits::matches(Limits a, Limits b) {
+  if (a.addressType != b.addressType) {
+    return false;
+  }
+  if (a.initial < b.initial) {
+    return false;
+  }
+  if (b.maximum.isSome() &&
+      (a.maximum.isNothing() || *a.maximum > *b.maximum)) {
+    return false;
+  }
+  return true;
+}
+
+bool TableType::matches(TableType a, TableType b) {
+  return a.elemType == b.elemType && Limits::matches(a.limits, b.limits);
+}
+
+bool MemoryDesc::typeMatches(const MemoryDesc& a, const MemoryDesc& b) {
+  return a.addressType() == b.addressType() && a.isShared() == b.isShared() &&
+         a.pageSize() == b.pageSize() && Limits::matches(a.limits, b.limits);
+}
+
+bool GlobalDesc::typeMatches(const GlobalDesc& a, const GlobalDesc& b) {
+  if (a.isMutable() != b.isMutable()) {
+    return false;
+  }
+  if (a.isMutable() && a.type() != b.type()) {
+    return false;
+  }
+  if (!a.isMutable() && !ValType::isSubTypeOf(a.type(), b.type())) {
+    return false;
+  }
+  return true;
+}
+
 size_t GlobalDesc::sizeOfExcludingThis(MallocSizeOf mallocSizeOf) const {
   return initial_.sizeOfExcludingThis(mallocSizeOf);
 }
