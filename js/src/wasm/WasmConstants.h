@@ -1237,6 +1237,9 @@ static const uint32_t MaxComponentFlagLabels = 32;
 static const uint32_t MaxComponentEnumCases = 10000;
 static const uint32_t MaxComponentParams = 1000;
 static const uint32_t MaxComponentCanonOpts = 1000;
+static const uint32_t MaxComponentFlatteningDepth = 63;
+static const uint32_t MaxComponentFlatParams = 16;
+static const uint32_t MaxComponentFlatResults = 1;
 static const uint32_t MaxComponentInlineExports = MaxComponentImports;
 #endif
 
