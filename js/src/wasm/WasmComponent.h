@@ -1054,6 +1054,13 @@ class Component : public JS::WasmComponent {
     return total;
   }
 
+  // --------------------------------------------------------------------------
+  // Instantiation
+
+  [[nodiscard]] bool instantiate(
+      JSContext* cx, HandleObject instanceProto,
+      MutableHandle<WasmComponentInstanceObject*> instance) const;
+
  private:
   // JS API and JS::WasmComponent implementation:
   JSObject* createObject(JSContext* cx) const override;
@@ -1061,6 +1068,49 @@ class Component : public JS::WasmComponent {
 
 using MutableComponent = RefPtr<Component>;
 using SharedComponent = RefPtr<const Component>;
+
+class ComponentInstance {
+  // The containing JS::Realm.
+  JS::Realm* realm_;
+
+  // The containing JSContext.
+  JSContext* cx_;
+
+  // The wasm::Component for this instance.
+  const SharedComponent component_;
+
+  using CoreInstanceVector =
+      GCVector<WasmInstanceObject*, 0, SystemAllocPolicy>;
+  // An array of all the core instances owned by this component instance. NOTE!
+  // This array is sparse; its indices will always correspond 1:1 with
+  // Component::coreInstances(), but not all such instances will get a
+  // WasmInstanceObject.
+  CoreInstanceVector coreInstances_;
+
+  ComponentInstance(JSContext* cx, Handle<WasmComponentInstanceObject*> object,
+                    const SharedComponent component);
+  ~ComponentInstance();
+
+  // Only WasmComponentInstanceObject can call the private trace function.
+  friend class js::WasmComponentInstanceObject;
+  void tracePrivate(JSTracer* trc);
+
+ public:
+  static ComponentInstance* create(JSContext* cx,
+                                   Handle<WasmComponentInstanceObject*> object,
+                                   const SharedComponent component);
+  static void destroy(ComponentInstance* instance);
+
+  [[nodiscard]] bool init(JSContext* cx);
+
+  mozilla::Maybe<WasmInstanceObject*> coreInstance(uint32_t index) const {
+    if (coreInstances_.length() <= index) {
+      return mozilla::Nothing();
+    }
+    WasmInstanceObject* instanceObj = coreInstances_[index];
+    return instanceObj ? mozilla::Some(instanceObj) : mozilla::Nothing();
+  }
+};
 
 UniqueChars ToString(ComponentItem item);
 UniqueChars ToString(ComponentSortIndex sortIndex);

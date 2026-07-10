@@ -1491,6 +1491,50 @@ const CacheableName& Component::getExportNameForAlias(
   return p->value();
 }
 
+bool Component::instantiate(
+    JSContext* cx, HandleObject instanceProto,
+    MutableHandle<WasmComponentInstanceObject*> instance) const {
+  instance.set(WasmComponentInstanceObject::create(cx, instanceProto, this));
+  if (!instance) {
+    return false;
+  }
+
+  // TODO(wasm-cm): Register the component instance with the realm?
+
+  return true;
+}
+
+ComponentInstance::ComponentInstance(
+    JSContext* cx, Handle<WasmComponentInstanceObject*> object,
+    const SharedComponent component)
+    : realm_(cx->realm()), cx_(cx), component_(component) {}
+
+ComponentInstance::~ComponentInstance() {}
+
+ComponentInstance* ComponentInstance::create(
+    JSContext* cx, Handle<WasmComponentInstanceObject*> object,
+    const SharedComponent component) {
+  void* base = js_malloc(sizeof(ComponentInstance));
+  if (!base) {
+    ReportOutOfMemory(cx);
+    return nullptr;
+  }
+  return new (base) ComponentInstance(cx, object, component);
+}
+
+void ComponentInstance::destroy(ComponentInstance* instance) {
+  instance->~ComponentInstance();
+  js_free(instance);
+}
+
+void ComponentInstance::tracePrivate(JSTracer* trc) {
+  coreInstances_.trace(trc);
+}
+
+// TODO(wasm-cm): Instantiation is not yet implemented; this will be filled in
+// by a later patch.
+bool ComponentInstance::init(JSContext* cx) { return true; }
+
 static const char* ComponentSortKeyword(ComponentSort sort) {
   switch (sort) {
     case ComponentSort::Func:
